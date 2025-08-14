@@ -1,0 +1,95 @@
+{
+    "manifest_version": 3,
+    "name": "Focus Guard - Content Blocker",
+    "version": "1.0.0",
+    "description": "Cross-browser extension to block adult content and maintain focus on productive activities",
+    "permissions": [
+        "storage",
+        "activeTab",
+        "tabs",
+        "scripting",
+        "webNavigation"
+    ],
+    "host_permissions": [
+        "*://*/*"
+    ],
+    "background": {
+        "service_worker": "background.js",
+        "type": "module"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "*://www.google.com/search*",
+                "*://google.com/search*"
+            ],
+            "js": [
+                "google-search-blocker.js"
+            ],
+            "run_at": "document_start"
+        },
+        {
+            "matches": [
+                "*://www.google.com/*",
+                "*://google.com/*",
+                "*://www.bing.com/*",
+                "*://bing.com/*",
+                "*://duckduckgo.com/*",
+                "*://www.duckduckgo.com/*",
+                "*://search.yahoo.com/*",
+                "*://yahoo.com/*",
+                "*://yandex.com/*",
+                "*://www.yandex.com/*",
+                "*://startpage.com/*",
+                "*://www.startpage.com/*",
+                "*://search.brave.com/*",
+                "*://ecosia.org/*",
+                "*://www.ecosia.org/*",
+                "*://qwant.com/*",
+                "*://www.qwant.com/*",
+                "*://youtube.com/*",
+                "*://www.youtube.com/*"
+            ],
+            "js": [
+                "content.js"
+            ],
+            "run_at": "document_start"
+        },
+        {
+            "matches": [
+                "*://*/*"
+            ],
+            "js": [
+                "domain-blocker.js"
+            ],
+            "run_at": "document_start"
+        }
+    ],
+    "action": {
+        "default_popup": "popup.html",
+        "default_title": "Focus Guard Settings"
+    },
+    "options_page": "options.html",
+    "options_ui": {
+        "page": "options.html",
+        "open_in_tab": true
+    },
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "blocked.html",
+                "blocked.js",
+                "options.html",
+                "debug-test.html"
+            ],
+            "matches": [
+                "*://*/*"
+            ]
+        }
+    ],
+    "icons": {
+        "16": "icons/icon16.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+    }
+}

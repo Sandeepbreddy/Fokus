@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus Guard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 350px;
+            min-height: 400px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .header {
+            padding: 20px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .logo {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .title {
+            font-size: 18px;
+            font-weight: 300;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            margin: 10px 0;
+        }
+
+        .status-text {
+            font-weight: 500;
+        }
+
+        .toggle {
+            position: relative;
+            width: 50px;
+            height: 24px;
+            background: #ccc;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle.active {
+            background: #4CAF50;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+
+        .toggle.active .toggle-slider {
+            transform: translateX(26px);
+        }
+
+        .stats {
+            padding: 15px 20px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .actions {
+            padding: 0 20px 20px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-danger {
+            background: rgba(255, 107, 107, 0.3);
+            border-color: #ff6b6b;
+        }
+
+        .btn-danger:hover {
+            background: rgba(255, 107, 107, 0.5);
+        }
+
+        .current-site {
+            padding: 15px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            font-size: 12px;
+        }
+
+        .site-url {
+            word-break: break-all;
+            opacity: 0.8;
+            margin: 5px 0;
+        }
+
+        .pin-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .pin-content {
+            background: #2c3e50;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 280px;
+        }
+
+        .pin-input {
+            width: 100%;
+            padding: 12px;
+            margin: 15px 0;
+            border: 1px solid #34495e;
+            border-radius: 5px;
+            background: #34495e;
+            color: white;
+            text-align: center;
+            font-size: 18px;
+            letter-spacing: 5px;
+        }
+
+        .pin-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .pin-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .pin-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .pin-btn-confirm {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .pin-btn-cancel {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-info {
+            background: #17a2b8;
+            font-size: 12px;
+            padding: 8px 12px;
+        }
+
+        .btn-info:hover {
+            background: #138496;
+        }
+
+        .help-text {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.7);
+            text-align: center;
+            margin-top: 10px;
+            padding: 0 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="logo">🛡️</div>
+        <div class="title">Focus Guard</div>
+    </div>
+
+    <div class="status">
+        <span class="status-text" id="status-text">Protection Active</span>
+        <div class="toggle active" id="toggle">
+            <div class="toggle-slider"></div>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat-item">
+            <span>Blocks Today</span>
+            <span class="stat-value" id="blocks-today">0</span>
+        </div>
+        <div class="stat-item">
+            <span>Focus Streak</span>
+            <span class="stat-value" id="focus-streak">0 days</span>
+        </div>
+        <div class="stat-item">
+            <span>Total Domains Blocked</span>
+            <span class="stat-value" id="total-domains">0</span>
+        </div>
+    </div>
+
+    <div class="current-site">
+        <strong>Current Site:</strong>
+        <div class="site-url" id="current-url">Loading...</div>
+        <button class="btn btn-danger" id="block-current-site" style="margin-top: 10px;">
+            Block This Domain
+        </button>
+    </div>
+
+    <div class="actions">
+        <button class="btn" id="open-settings">⚙️ Settings & Management</button>
+        <button class="btn" id="update-blocklist">🔄 Update Blocklist</button>
+        <button class="btn" id="pause-blocking">⏸️ Pause Blocking (1 hour)</button>
+        <button class="btn btn-info" id="settings-help">❓ Settings Help</button>
+        <button class="btn btn-info" id="direct-settings">🔗 Direct Settings Link</button>
+        <button class="btn btn-info" id="test-settings">🧪 Test Settings Opening</button>
+    </div>
+
+    <div class="help-text">
+        If settings won't open, right-click extension icon → Options
+    </div>
+
+    .error {
+    color: #ff6b6b;
+    font-size: 12px;
+    margin-top: 10px;
+    }
+
+    <!-- PIN Modal -->
+    <div class="pin-modal" id="pin-modal">
+        <div class="pin-content">
+            <h3>Enter PIN</h3>
+            <p id="pin-message">Enter your PIN to access settings</p>
+            <input type="password" class="pin-input" id="pin-input" maxlength="6" placeholder="••••">
+            <div class="pin-buttons">
+                <button class="pin-btn pin-btn-cancel" id="pin-cancel">Cancel</button>
+                <button class="pin-btn pin-btn-confirm" id="pin-confirm">Confirm</button>
+            </div>
+            <div class="error" id="pin-error"></div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
