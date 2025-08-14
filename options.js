@@ -1,4 +1,4 @@
-// options.js - Complete rewrite with centralized Supabase configuration
+// options.js - Complete implementation for Fokus Extension Settings
 
 class OptionsManager
 {
@@ -343,7 +343,7 @@ class OptionsManager
 
             const response = await this.sendMessage({ action: 'getSupabaseStatus' });
 
-            if (response.status.connected)
+            if (response && response.status && response.status.connected)
             {
                 this.updateConnectionStatus('Connected', response.status.project || 'Fokus Database', 'Authenticated');
 
@@ -356,7 +356,7 @@ class OptionsManager
                 }
             } else
             {
-                this.updateConnectionStatus('Not Connected', response.status.reason, 'Not authenticated');
+                this.updateConnectionStatus('Not Connected', response?.status?.reason || 'Unknown error', 'Not authenticated');
                 this.showSignInForm();
             }
         } catch (error)
@@ -482,7 +482,7 @@ class OptionsManager
                 password
             });
 
-            if (response.success)
+            if (response && response.success)
             {
                 if (response.needsConfirmation)
                 {
@@ -497,6 +497,9 @@ class OptionsManager
                         this.checkSupabaseStatus();
                     }, 1500);
                 }
+            } else
+            {
+                this.showMessage(messageEl, '❌ Sign up failed: ' + (response?.error || 'Unknown error'), 'error');
             }
         } catch (error)
         {
@@ -526,7 +529,7 @@ class OptionsManager
                 password
             });
 
-            if (response.success)
+            if (response && response.success)
             {
                 this.showMessage(messageEl, '✅ Signed in successfully!', 'success');
                 setTimeout(() =>
@@ -535,6 +538,9 @@ class OptionsManager
                     this.checkSupabaseStatus();
                     this.loadAllSettings(); // Reload settings after sign in
                 }, 1500);
+            } else
+            {
+                this.showMessage(messageEl, '❌ Sign in failed: ' + (response?.error || 'Invalid credentials'), 'error');
             }
         } catch (error)
         {
@@ -550,11 +556,14 @@ class OptionsManager
         {
             const response = await this.sendMessage({ action: 'signOut' });
 
-            if (response.success)
+            if (response && response.success)
             {
                 this.showSignInForm();
                 this.updateConnectionStatus('Connected', 'Fokus Database', 'Not authenticated');
                 this.showSuccess('✅ Signed out successfully!');
+            } else
+            {
+                this.showError('❌ Sign out failed');
             }
         } catch (error)
         {
@@ -576,7 +585,7 @@ class OptionsManager
         {
             const response = await this.sendMessage({ action: 'syncToCloud' });
 
-            if (response.success)
+            if (response && response.success)
             {
                 button.innerHTML = '<span>✅</span><span>Uploaded!</span>';
                 this.loadSyncStatus();
@@ -614,7 +623,7 @@ class OptionsManager
         {
             const response = await this.sendMessage({ action: 'syncFromCloud' });
 
-            if (response.success)
+            if (response && response.success)
             {
                 if (response.action === 'downloaded')
                 {
@@ -750,7 +759,7 @@ class OptionsManager
         try
         {
             const response = await this.sendMessage({ action: 'getCloudBackups' });
-            const backups = response.backups || [];
+            const backups = response?.backups || [];
 
             if (backups.length === 0)
             {
@@ -795,7 +804,7 @@ class OptionsManager
                 backupId
             });
 
-            if (response.success)
+            if (response && response.success)
             {
                 this.loadAllSettings();
                 this.loadSyncStatus();
@@ -818,7 +827,7 @@ class OptionsManager
                 backupId
             });
 
-            if (response.success)
+            if (response && response.success)
             {
                 this.loadCloudBackups();
                 this.showSuccess('✅ Backup deleted successfully!');
@@ -843,7 +852,7 @@ class OptionsManager
         {
             const response = await this.sendMessage({ action: 'getSupabaseStatus' });
 
-            if (response.status.connected)
+            if (response && response.status && response.status.connected)
             {
                 button.textContent = '✅ Connected!';
                 alert(`✅ Connection Test Successful!\n\n` +
@@ -854,7 +863,7 @@ class OptionsManager
             } else
             {
                 button.textContent = '❌ Failed';
-                alert(`❌ Connection Test Failed!\n\nReason: ${response.status.reason}`);
+                alert(`❌ Connection Test Failed!\n\nReason: ${response?.status?.reason || 'Unknown error'}`);
             }
         } catch (error)
         {
@@ -880,9 +889,9 @@ class OptionsManager
             const exportData = {
                 version: '1.0.0',
                 timestamp: new Date().toISOString(),
-                user: statusResponse.user,
-                backups: response.backups || [],
-                syncStatus: statusResponse.status
+                user: statusResponse?.user,
+                backups: response?.backups || [],
+                syncStatus: statusResponse?.status
             };
 
             const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -930,7 +939,7 @@ class OptionsManager
                 const totalBackupsEl = document.getElementById('total-backups');
                 if (totalBackupsEl)
                 {
-                    totalBackupsEl.textContent = (response.backups || []).length;
+                    totalBackupsEl.textContent = (response?.backups || []).length;
                 }
             } catch (error)
             {
@@ -972,7 +981,16 @@ class OptionsManager
         try
         {
             const data = await chrome.storage.local.get(['blockedKeywords']);
-            const keywords = data.blockedKeywords || this.defaultKeywords;
+
+            // If no keywords are stored, initialize with defaults
+            let keywords = data.blockedKeywords;
+            if (!keywords || keywords.length === 0)
+            {
+                keywords = this.defaultKeywords;
+                // Save defaults to storage for future use
+                await chrome.storage.local.set({ blockedKeywords: this.defaultKeywords });
+            }
+
             this.renderKeywordsList(keywords);
         } catch (error)
         {
@@ -1025,11 +1043,28 @@ class OptionsManager
         try
         {
             const data = await chrome.storage.local.get(['blockedKeywords']);
-            const currentKeywords = data.blockedKeywords || this.defaultKeywords;
 
-            if (currentKeywords.includes(keyword))
+            // Check if blockedKeywords exists, if not use empty array (not defaultKeywords)
+            const currentKeywords = data.blockedKeywords || [];
+
+            // If no keywords exist yet, initialize with defaults
+            if (currentKeywords.length === 0 && !data.blockedKeywords)
+            {
+                await chrome.storage.local.set({ blockedKeywords: this.defaultKeywords });
+                // Reload with the newly set defaults
+                const updatedData = await chrome.storage.local.get(['blockedKeywords']);
+                currentKeywords.push(...updatedData.blockedKeywords);
+            }
+
+            // Check for duplicates (case-insensitive)
+            const keywordExists = currentKeywords.some(existingKeyword =>
+                existingKeyword.toLowerCase() === keyword.toLowerCase()
+            );
+
+            if (keywordExists)
             {
                 this.showError('This keyword is already blocked.');
+                input.value = '';
                 return;
             }
 
@@ -1048,7 +1083,7 @@ class OptionsManager
             input.value = '';
             await this.loadKeywords();
             await this.loadStats();
-            this.showSuccess('Keyword added successfully!');
+            this.showSuccess(`Keyword "${keyword}" added successfully!`);
 
         } catch (error)
         {
@@ -1064,8 +1099,12 @@ class OptionsManager
         try
         {
             const data = await chrome.storage.local.get(['blockedKeywords']);
-            const currentKeywords = data.blockedKeywords || this.defaultKeywords;
-            const updatedKeywords = currentKeywords.filter(k => k !== keyword);
+            const currentKeywords = data.blockedKeywords || [];
+
+            // Filter out the keyword (case-insensitive)
+            const updatedKeywords = currentKeywords.filter(k =>
+                k.toLowerCase() !== keyword.toLowerCase()
+            );
 
             await chrome.storage.local.set({ blockedKeywords: updatedKeywords });
 
@@ -1080,7 +1119,7 @@ class OptionsManager
 
             await this.loadKeywords();
             await this.loadStats();
-            this.showSuccess('Keyword removed successfully!');
+            this.showSuccess(`Keyword "${keyword}" removed successfully!`);
 
         } catch (error)
         {
@@ -1191,12 +1230,15 @@ class OptionsManager
         try
         {
             const response = await this.sendMessage({ action: 'addCustomDomain', domain });
-            if (response.success)
+            if (response && response.success)
             {
                 input.value = '';
                 await this.loadDomains();
                 await this.loadStats();
                 this.showSuccess('Domain added successfully!');
+            } else
+            {
+                this.showError('Failed to add domain.');
             }
         } catch (error)
         {
@@ -1211,11 +1253,14 @@ class OptionsManager
         try
         {
             const response = await this.sendMessage({ action: 'removeCustomDomain', domain });
-            if (response.success)
+            if (response && response.success)
             {
                 await this.loadDomains();
                 await this.loadStats();
                 this.showSuccess('Domain removed successfully!');
+            } else
+            {
+                this.showError('Failed to remove domain.');
             }
         } catch (error)
         {
@@ -1366,7 +1411,7 @@ class OptionsManager
         try
         {
             const response = await this.sendMessage({ action: 'addBlocklistUrl', urlConfig });
-            if (response.success)
+            if (response && response.success)
             {
                 // Clear form
                 ['blocklist-name', 'blocklist-url', 'blocklist-description'].forEach(id =>
@@ -1377,6 +1422,9 @@ class OptionsManager
 
                 await this.loadBlocklistSources();
                 this.showSuccess('Blocklist source added successfully!');
+            } else
+            {
+                this.showError('Failed to add blocklist source.');
             }
         } catch (error)
         {
@@ -1391,11 +1439,14 @@ class OptionsManager
         try
         {
             const response = await this.sendMessage({ action: 'removeBlocklistUrl', id });
-            if (response.success)
+            if (response && response.success)
             {
                 await this.loadBlocklistSources();
                 await this.loadStats();
                 this.showSuccess('Blocklist source removed successfully!');
+            } else
+            {
+                this.showError('Failed to remove blocklist source.');
             }
         } catch (error)
         {
@@ -1408,10 +1459,13 @@ class OptionsManager
         try
         {
             const response = await this.sendMessage({ action: 'toggleBlocklistUrl', id, enabled });
-            if (response.success)
+            if (response && response.success)
             {
                 await this.loadBlocklistSources();
                 this.showSuccess(`Blocklist source ${enabled ? 'enabled' : 'disabled'} successfully!`);
+            } else
+            {
+                this.showError('Failed to toggle blocklist source.');
             }
         } catch (error)
         {
@@ -1453,10 +1507,13 @@ class OptionsManager
         try
         {
             const response = await this.sendMessage({ action: 'addBlocklistUrl', urlConfig });
-            if (response.success)
+            if (response && response.success)
             {
                 await this.loadBlocklistSources();
                 this.showSuccess(`${sourceConfig.name} added successfully!`);
+            } else
+            {
+                this.showError('Failed to add popular blocklist source.');
             }
         } catch (error)
         {
@@ -1520,560 +1577,794 @@ class OptionsManager
         try
         {
             const response = await this.sendMessage({ action: 'forceUpdateBlocklist' });
-            if// options.js - Complete rewrite with centralized Supabase configuration
+            if (response && response.success)
+            {
+                button.textContent = '✅ Updated!';
+                if (progressFill) progressFill.style.width = '100%';
+                await this.loadBlocklistSources();
+                await this.loadStats();
+                this.showSuccess('✅ Blocklist updated successfully!');
+            } else
+            {
+                button.textContent = '❌ Failed';
+                this.showError('❌ Failed to update blocklist');
+            }
+        } catch (error)
+        {
+            button.textContent = '❌ Failed';
+            this.showError(`❌ Update failed: ${error.message}`);
+        } finally
+        {
+            clearInterval(progressInterval);
+            setTimeout(() =>
+            {
+                button.textContent = '🔄 Update All Sources';
+                button.disabled = false;
+                if (progressBar) progressBar.style.display = 'none';
+                if (progressFill) progressFill.style.width = '0%';
+            }, 2000);
+        }
+    }
 
-class OptionsManager
+    async viewBlockedCount()
+    {
+        try
+        {
+            const data = await chrome.storage.local.get(['blockedDomains', 'customDomains', 'blockedKeywords']);
+
+            const githubDomains = (data.blockedDomains || []).length;
+            const customDomains = (data.customDomains || []).length;
+            const keywords = (data.blockedKeywords || []).length;
+
+            const total = githubDomains + customDomains;
+
+            alert(`📊 Blocking Statistics\n\n` +
+                `GitHub Blocklist Domains: ${githubDomains.toLocaleString()}\n` +
+                `Custom Domains: ${customDomains.toLocaleString()}\n` +
+                `Total Domains: ${total.toLocaleString()}\n\n` +
+                `Blocked Keywords: ${keywords.toLocaleString()}\n\n` +
+                `Last Updated: ${new Date().toLocaleString()}`);
+        } catch (error)
+        {
+            this.showError('Failed to load blocking statistics.');
+        }
+    }
+
+    // ============ BACKUP & RESTORE ============
+    setupBackupEventListeners()
+    {
+        document.getElementById('export-settings')?.addEventListener('click', () => this.exportSettings());
+        document.getElementById('import-btn')?.addEventListener('click', () => this.importSettings());
+        document.getElementById('reset-all')?.addEventListener('click', () => this.resetAllSettings());
+
+        // Import file handler
+        document.getElementById('import-file')?.addEventListener('change', (e) => this.handleImportFile(e));
+    }
+
+    async exportSettings()
+    {
+        try
+        {
+            const data = await chrome.storage.local.get([
+                'blockedKeywords', 'customDomains', 'blocklistUrls', 'isActive',
+                'blocksToday', 'focusStreak', 'totalBlocks', 'lastGithubUpdate'
+            ]);
+
+            // Exclude PIN for security
+            const exportData = {
+                version: '1.0.0',
+                timestamp: new Date().toISOString(),
+                settings: {
+                    blockedKeywords: data.blockedKeywords || [],
+                    customDomains: data.customDomains || [],
+                    blocklistUrls: data.blocklistUrls || [],
+                    isActive: data.isActive !== undefined ? data.isActive : true,
+                    lastGithubUpdate: data.lastGithubUpdate || 0
+                },
+                stats: {
+                    blocksToday: data.blocksToday || 0,
+                    focusStreak: data.focusStreak || 0,
+                    totalBlocks: data.totalBlocks || 0
+                }
+            };
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `fokus-settings-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            this.showSuccess('✅ Settings exported successfully!');
+        } catch (error)
+        {
+            this.showError(`❌ Failed to export settings: ${error.message}`);
+        }
+    }
+
+    importSettings()
+    {
+        const fileInput = document.getElementById('import-file');
+        if (fileInput)
+        {
+            fileInput.click();
+        }
+    }
+
+    async handleImportFile(event)
+    {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const messageEl = document.getElementById('backup-message');
+
+        try
+        {
+            const text = await file.text();
+            const importData = JSON.parse(text);
+
+            // Validate import data
+            if (!importData.settings || !importData.version)
+            {
+                throw new Error('Invalid settings file format');
+            }
+
+            if (!confirm('Import these settings? This will overwrite your current configuration.'))
+            {
+                return;
+            }
+
+            // Preserve current PIN
+            const currentPin = await chrome.storage.local.get(['pin']);
+
+            // Import settings
+            const settingsToImport = {
+                ...importData.settings,
+                pin: currentPin.pin || '1234', // Keep current PIN
+                lastImportDate: new Date().toISOString()
+            };
+
+            // Also import stats if available
+            if (importData.stats)
+            {
+                Object.assign(settingsToImport, importData.stats);
+            }
+
+            await chrome.storage.local.set(settingsToImport);
+
+            // Reload all settings in UI
+            await this.loadAllSettings();
+
+            this.showMessage(messageEl, '✅ Settings imported successfully!', 'success');
+
+        } catch (error)
+        {
+            console.error('❌ Import error:', error);
+            this.showMessage(messageEl, `❌ Failed to import settings: ${error.message}`, 'error');
+        } finally
+        {
+            // Clear file input
+            event.target.value = '';
+        }
+    }
+
+    async resetAllSettings()
+    {
+        if (!confirm('⚠️ Reset ALL settings to defaults?\n\nThis will:\n- Clear all custom domains and keywords\n- Reset PIN to 1234\n- Clear all statistics\n- Remove all blocklist sources\n\nThis action cannot be undone!'))
+        {
+            return;
+        }
+
+        if (!confirm('Are you absolutely sure? This will permanently delete all your settings.'))
+        {
+            return;
+        }
+
+        try
+        {
+            // Clear all storage except essential defaults
+            await chrome.storage.local.clear();
+
+            // Set default values
+            await chrome.storage.local.set({
+                pin: '1234',
+                blockedKeywords: this.defaultKeywords,
+                customDomains: [],
+                blocklistUrls: [],
+                isActive: true,
+                blocksToday: 0,
+                focusStreak: 0,
+                totalBlocks: 0,
+                lastResetDate: new Date().toISOString()
+            });
+
+            // Reload all settings in UI
+            await this.loadAllSettings();
+
+            this.showSuccess('✅ All settings reset to defaults!');
+
+        } catch (error)
+        {
+            this.showError(`❌ Failed to reset settings: ${error.message}`);
+        }
+    }
+
+    // ============ EXTENSION STATUS ============
+    setupStatusEventListeners()
+    {
+        document.getElementById('test-blocking')?.addEventListener('click', () => this.testBlocking());
+        document.getElementById('view-logs')?.addEventListener('click', () => this.viewLogs());
+    }
+
+    async testBlocking()
+    {
+        // Open debug test page
+        const debugUrl = chrome.runtime.getURL('debug-test.html');
+        chrome.tabs.create({ url: debugUrl });
+    }
+
+    async viewLogs()
+    {
+        try
+        {
+            const data = await chrome.storage.local.get([
+                'blocksToday', 'focusStreak', 'totalBlocks', 'lastBlockDate',
+                'lastCloudSync', 'lastSyncDirection', 'lastImportDate', 'lastResetDate'
+            ]);
+
+            let logText = '📋 Focus Guard Activity Log\n\n';
+            logText += `📊 Current Statistics:\n`;
+            logText += `- Blocks Today: ${data.blocksToday || 0}\n`;
+            logText += `- Focus Streak: ${data.focusStreak || 0} days\n`;
+            logText += `- Total Blocks: ${data.totalBlocks || 0}\n\n`;
+
+            logText += `📅 Important Dates:\n`;
+            if (data.lastBlockDate)
+            {
+                logText += `- Last Block: ${data.lastBlockDate}\n`;
+            }
+            if (data.lastCloudSync)
+            {
+                logText += `- Last Cloud Sync: ${new Date(data.lastCloudSync).toLocaleString()} (${data.lastSyncDirection || 'unknown'})\n`;
+            }
+            if (data.lastImportDate)
+            {
+                logText += `- Last Settings Import: ${new Date(data.lastImportDate).toLocaleString()}\n`;
+            }
+            if (data.lastResetDate)
+            {
+                logText += `- Last Settings Reset: ${new Date(data.lastResetDate).toLocaleString()}\n`;
+            }
+
+            // Create and download log file
+            const blob = new Blob([logText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `fokus-activity-log-${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            this.showSuccess('✅ Activity log exported!');
+
+        } catch (error)
+        {
+            this.showError(`❌ Failed to generate activity log: ${error.message}`);
+        }
+    }
+
+    // ============ ADVANCED SETTINGS ============
+    setupAdvancedEventListeners()
+    {
+        document.getElementById('auto-sync-enabled')?.addEventListener('change', (e) => this.toggleAutoSync(e.target.checked));
+        document.getElementById('sync-frequency')?.addEventListener('change', (e) => this.updateSyncFrequency(e.target.value));
+        document.getElementById('backup-retention')?.addEventListener('change', (e) => this.updateBackupRetention(e.target.value));
+        document.getElementById('cleanup-backups')?.addEventListener('click', () => this.cleanupBackups());
+    }
+
+    async toggleAutoSync(enabled)
+    {
+        try
+        {
+            await chrome.storage.local.set({ autoSyncEnabled: enabled });
+            await this.sendMessage({ action: 'setAutoSync', enabled });
+            this.showSuccess(`Auto-sync ${enabled ? 'enabled' : 'disabled'}!`);
+        } catch (error)
+        {
+            this.showError('Failed to update auto-sync setting.');
+        }
+    }
+
+    async updateSyncFrequency(frequency)
+    {
+        try
+        {
+            await chrome.storage.local.set({ syncFrequency: parseInt(frequency) });
+            await this.sendMessage({ action: 'setSyncFrequency', frequency: parseInt(frequency) });
+            this.showSuccess(`Sync frequency updated to ${frequency} minutes!`);
+        } catch (error)
+        {
+            this.showError('Failed to update sync frequency.');
+        }
+    }
+
+    async updateBackupRetention(retention)
+    {
+        try
+        {
+            await chrome.storage.local.set({ backupRetention: parseInt(retention) });
+            this.showSuccess(`Backup retention updated to ${retention} backups!`);
+        } catch (error)
+        {
+            this.showError('Failed to update backup retention.');
+        }
+    }
+
+    async cleanupBackups()
+    {
+        if (!confirm('Cleanup old backups? This will remove backups beyond the retention limit.')) return;
+
+        try
+        {
+            const response = await this.sendMessage({ action: 'cleanupBackups' });
+            if (response && response.success)
+            {
+                this.loadCloudBackups();
+                this.showSuccess(`✅ Cleaned up ${response.deletedCount || 0} old backups!`);
+            } else
+            {
+                this.showError('Failed to cleanup backups.');
+            }
+        } catch (error)
+        {
+            this.showError(`❌ Cleanup failed: ${error.message}`);
+        }
+    }
+
+    // ============ UTILITY METHODS ============
+    async loadAllSettings()
+    {
+        console.log('🔄 Loading all settings...');
+
+        try
+        {
+            await this.loadCurrentPin();
+            await this.loadStats();
+            await this.loadKeywords();
+            await this.loadDomains();
+            await this.loadBlocklistSources();
+            await this.loadAdvancedSettings();
+
+            console.log('✅ All settings loaded successfully');
+        } catch (error)
+        {
+            console.error('❌ Failed to load some settings:', error);
+        }
+    }
+
+    async loadStats()
+    {
+        try
+        {
+            const data = await chrome.storage.local.get([
+                'blocksToday', 'focusStreak', 'totalBlocks', 'customDomains', 'blockedKeywords', 'blockedDomains'
+            ]);
+
+            // Update statistics display
+            const elements = {
+                totalBlocks: document.getElementById('total-blocks'),
+                domainsBlocked: document.getElementById('domains-blocked'),
+                keywordsBlocked: document.getElementById('keywords-blocked'),
+                timeSaved: document.getElementById('time-saved')
+            };
+
+            if (elements.totalBlocks)
+            {
+                elements.totalBlocks.textContent = (data.totalBlocks || 0).toLocaleString();
+            }
+
+            if (elements.domainsBlocked)
+            {
+                const customDomains = (data.customDomains || []).length;
+                const githubDomains = (data.blockedDomains || []).length;
+                elements.domainsBlocked.textContent = (customDomains + githubDomains).toLocaleString();
+            }
+
+            if (elements.keywordsBlocked)
+            {
+                elements.keywordsBlocked.textContent = (data.blockedKeywords || []).length.toLocaleString();
+            }
+
+            if (elements.timeSaved)
+            {
+                // Estimate time saved: assuming each block saves ~2 minutes
+                const estimatedMinutes = (data.totalBlocks || 0) * 2;
+                const hours = Math.floor(estimatedMinutes / 60);
+                elements.timeSaved.textContent = hours > 0 ? `${hours}h` : `${estimatedMinutes}m`;
+            }
+
+        } catch (error)
+        {
+            console.error('❌ Failed to load stats:', error);
+        }
+    }
+
+    async loadAdvancedSettings()
+    {
+        try
+        {
+            const data = await chrome.storage.local.get([
+                'autoSyncEnabled', 'syncFrequency', 'backupRetention'
+            ]);
+
+            // Update auto-sync checkbox
+            const autoSyncEl = document.getElementById('auto-sync-enabled');
+            if (autoSyncEl)
+            {
+                autoSyncEl.checked = data.autoSyncEnabled !== false;
+            }
+
+            // Update sync frequency dropdown
+            const syncFreqEl = document.getElementById('sync-frequency');
+            if (syncFreqEl)
+            {
+                syncFreqEl.value = data.syncFrequency || 5;
+            }
+
+            // Update backup retention dropdown
+            const backupRetentionEl = document.getElementById('backup-retention');
+            if (backupRetentionEl)
+            {
+                backupRetentionEl.value = data.backupRetention || 10;
+            }
+
+        } catch (error)
+        {
+            console.error('❌ Failed to load advanced settings:', error);
+        }
+    }
+
+    updateBrowserInfo()
+    {
+        const browserInfoEl = document.getElementById('browser-info');
+        if (browserInfoEl)
+        {
+            const userAgent = navigator.userAgent;
+            let browserName = 'Unknown';
+
+            if (userAgent.includes('Chrome')) browserName = 'Chrome';
+            else if (userAgent.includes('Firefox')) browserName = 'Firefox';
+            else if (userAgent.includes('Safari')) browserName = 'Safari';
+            else if (userAgent.includes('Edge')) browserName = 'Edge';
+
+            browserInfoEl.textContent = browserName;
+        }
+    }
+
+    // ============ HELPER METHODS ============
+    showMessage(element, message, type)
+    {
+        if (!element) return;
+
+        const messageClass = type === 'success' ? 'success-message' :
+            type === 'info' ? 'info-message' : 'error-message';
+
+        element.innerHTML = `<div class="${messageClass}">${message}</div>`;
+
+        // Auto-clear messages after 8 seconds
+        setTimeout(() =>
+        {
+            if (element.innerHTML.includes(message))
+            {
+                element.innerHTML = '';
+            }
+        }, 8000);
+    }
+
+    showSuccess(message)
+    {
+        console.log('✅', message);
+        this.showGlobalMessage(message, 'success');
+    }
+
+    showError(message)
+    {
+        console.error('❌', message);
+        this.showGlobalMessage(message, 'error');
+    }
+
+    showGlobalMessage(message, type)
+    {
+        // Create temporary message element
+        const messageEl = document.createElement('div');
+        messageEl.className = type === 'success' ? 'success-message' : 'error-message';
+        messageEl.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            max-width: 400px;
+            padding: 15px 20px;
+            border-radius: 12px;
+            font-weight: 500;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+            animation: slideInRight 0.4s ease-out;
+        `;
+        messageEl.textContent = message;
+
+        document.body.appendChild(messageEl);
+
+        // Remove after 5 seconds
+        setTimeout(() =>
+        {
+            messageEl.style.animation = 'slideInRight 0.4s ease-out reverse';
+            setTimeout(() =>
+            {
+                if (messageEl.parentNode)
                 {
-                    constructor()
+                    messageEl.parentNode.removeChild(messageEl);
+                }
+            }, 400);
+        }, 5000);
+    }
+
+    sendMessage(message)
+    {
+        return new Promise((resolve, reject) =>
+        {
+            try
+            {
+                chrome.runtime.sendMessage(message, (response) =>
+                {
+                    if (chrome.runtime.lastError)
                     {
-                        this.isInitialized = false;
-                        this.currentPin = null;
-                        this.defaultKeywords = [
-                            'adult', 'porn', 'xxx', 'sex', 'nude', 'naked', 'nsfw',
-                            'explicit', 'mature', 'erotic', 'lesbian', 'gay', 'anal',
-                            'oral', 'bdsm', 'fetish', 'webcam', 'escort', 'dating'
-                        ];
+                        console.error('Runtime error:', chrome.runtime.lastError.message);
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else
+                    {
+                        resolve(response);
                     }
-
-                    async init()
-                    {
-                        console.log('🚀 Initializing Options Manager...');
-
-                        try
-                        {
-                            this.setupEventListeners();
-                            await this.loadAllSettings();
-                            await this.initializeSupabaseFeatures();
-                            this.updateBrowserInfo();
-
-                            this.isInitialized = true;
-                            console.log('✅ Options Manager initialized successfully');
-                        } catch (error)
-                        {
-                            console.error('❌ Failed to initialize Options Manager:', error);
-                            this.showError('Failed to initialize settings. Please refresh the page.');
-                        }
-                    }
-
-                    setupEventListeners()
-                    {
-                        // PIN Management
-                        this.setupPinEventListeners();
-
-                        // Cloud Sync & Authentication
-                        this.setupCloudEventListeners();
-
-                        // Keywords Management
-                        this.setupKeywordsEventListeners();
-
-                        // Domains Management
-                        this.setupDomainsEventListeners();
-
-                        // Blocklist Management
-                        this.setupBlocklistEventListeners();
-
-                        // Backup & Restore
-                        this.setupBackupEventListeners();
-
-                        // Extension Status
-                        this.setupStatusEventListeners();
-
-                        // Advanced Settings
-                        this.setupAdvancedEventListeners();
-                    }
-
-                    // ============ PIN MANAGEMENT ============
-                    setupPinEventListeners()
-                    {
-                        // Show/hide PIN
-                        document.getElementById('show-pin')?.addEventListener('click', () => this.togglePinVisibility());
-                        document.getElementById('copy-pin')?.addEventListener('click', () => this.copyPin());
-
-                        // PIN change
-                        document.getElementById('change-pin')?.addEventListener('click', () => this.changePIN());
-                        document.getElementById('reset-to-default')?.addEventListener('click', () => this.resetPinToDefault());
-
-                        // Quick PIN buttons
-                        document.querySelectorAll('.quick-pin-btn').forEach(btn =>
-                        {
-                            btn.addEventListener('click', () => this.useQuickPin(btn.dataset.pin));
-                        });
-                        document.getElementById('generate-random-pin')?.addEventListener('click', () => this.generateRandomPin());
-
-                        // Enter key handlers
-                        document.getElementById('confirm-pin')?.addEventListener('keypress', (e) =>
-                        {
-                            if (e.key === 'Enter') this.changePIN();
-                        });
-                    }
-
-                    async loadCurrentPin()
-                    {
-                        try
-                        {
-                            const data = await chrome.storage.local.get(['pin']);
-                            this.currentPin = data.pin || '1234';
-                            this.updatePinDisplay();
-                        } catch (error)
-                        {
-                            console.error('❌ Failed to load current PIN:', error);
-                            this.currentPin = '1234';
-                        }
-                    }
-
-                    updatePinDisplay()
-                    {
-                        const display = document.getElementById('current-pin-display');
-                        if (display)
-                        {
-                            display.textContent = '••••';
-                            display.dataset.pin = this.currentPin;
-                        }
-                    }
-
-                    togglePinVisibility()
-                    {
-                        const display = document.getElementById('current-pin-display');
-                        const btn = document.getElementById('show-pin');
-
-                        if (display.textContent === '••••')
-                        {
-                            display.textContent = this.currentPin;
-                            btn.innerHTML = '🙈 Hide PIN';
-
-                            // Auto-hide after 5 seconds
-                            setTimeout(() =>
-                            {
-                                if (display.textContent === this.currentPin)
-                                {
-                                    display.textContent = '••••';
-                                    btn.innerHTML = '👁️ Show PIN';
-                                }
-                            }, 5000);
-                        } else
-                        {
-                            display.textContent = '••••';
-                            btn.innerHTML = '👁️ Show PIN';
-                        }
-                    }
-
-                    async copyPin()
-                    {
-                        try
-                        {
-                            await navigator.clipboard.writeText(this.currentPin);
-                            const btn = document.getElementById('copy-pin');
-                            const originalText = btn.innerHTML;
-                            btn.innerHTML = '✅ Copied!';
-                            setTimeout(() =>
-                            {
-                                btn.innerHTML = originalText;
-                            }, 2000);
-                        } catch (error)
-                        {
-                            console.error('❌ Failed to copy PIN:', error);
-                            alert('Failed to copy PIN to clipboard');
-                        }
-                    }
-
-                    async changePIN()
-                    {
-                        const currentPin = document.getElementById('current-pin')?.value;
-                        const newPin = document.getElementById('new-pin')?.value;
-                        const confirmPin = document.getElementById('confirm-pin')?.value;
-                        const messageEl = document.getElementById('pin-message');
-
-                        if (!messageEl) return;
-
-                        // Clear previous messages
-                        messageEl.innerHTML = '';
-
-                        if (!currentPin || !newPin || !confirmPin)
-                        {
-                            this.showMessage(messageEl, 'Please fill in all PIN fields.', 'error');
-                            return;
-                        }
-
-                        if (currentPin !== this.currentPin)
-                        {
-                            this.showMessage(messageEl, 'Current PIN is incorrect.', 'error');
-                            return;
-                        }
-
-                        if (newPin !== confirmPin)
-                        {
-                            this.showMessage(messageEl, 'New PINs do not match.', 'error');
-                            return;
-                        }
-
-                        if (newPin.length < 4)
-                        {
-                            this.showMessage(messageEl, 'PIN must be at least 4 characters.', 'error');
-                            return;
-                        }
-
-                        if (!/^\d+$/.test(newPin))
-                        {
-                            this.showMessage(messageEl, 'PIN should contain only numbers.', 'error');
-                            return;
-                        }
-
-                        try
-                        {
-                            await chrome.storage.local.set({ pin: newPin });
-                            this.currentPin = newPin;
-                            this.updatePinDisplay();
-
-                            this.showMessage(messageEl, 'PIN changed successfully! 🎉', 'success');
-
-                            // Clear form
-                            ['current-pin', 'new-pin', 'confirm-pin'].forEach(id =>
-                            {
-                                const el = document.getElementById(id);
-                                if (el) el.value = '';
-                            });
-
-                        } catch (error)
-                        {
-                            console.error('❌ PIN change error:', error);
-                            this.showMessage(messageEl, 'Failed to change PIN. Please try again.', 'error');
-                        }
-                    }
-
-                    async resetPinToDefault()
-                    {
-                        if (!confirm('Reset PIN to default (1234)?')) return;
-
-                        try
-                        {
-                            await chrome.storage.local.set({ pin: '1234' });
-                            this.currentPin = '1234';
-                            this.updatePinDisplay();
-
-                            const messageEl = document.getElementById('pin-message');
-                            if (messageEl)
-                            {
-                                this.showMessage(messageEl, 'PIN reset to default (1234) successfully!', 'success');
-                            }
-                        } catch (error)
-                        {
-                            console.error('❌ PIN reset error:', error);
-                            const messageEl = document.getElementById('pin-message');
-                            if (messageEl)
-                            {
-                                this.showMessage(messageEl, 'Failed to reset PIN. Please try again.', 'error');
-                            }
-                        }
-                    }
-
-                    useQuickPin(pin)
-                    {
-                        const newPinEl = document.getElementById('new-pin');
-                        const confirmPinEl = document.getElementById('confirm-pin');
-
-                        if (newPinEl) newPinEl.value = pin;
-                        if (confirmPinEl) confirmPinEl.value = pin;
-
-                        // Highlight the selected button temporarily
-                        const btn = document.querySelector(`[data-pin="${pin}"]`);
-                        if (btn)
-                        {
-                            const originalStyle = btn.style.background;
-                            btn.style.background = '#4CAF50';
-                            btn.style.color = 'white';
-
-                            setTimeout(() =>
-                            {
-                                btn.style.background = originalStyle;
-                                btn.style.color = '#4CAF50';
-                            }, 1000);
-                        }
-                    }
-
-                    generateRandomPin()
-                    {
-                        const randomPin = Math.floor(1000 + Math.random() * 9000).toString();
-                        const newPinEl = document.getElementById('new-pin');
-                        const confirmPinEl = document.getElementById('confirm-pin');
-
-                        if (newPinEl) newPinEl.value = randomPin;
-                        if (confirmPinEl) confirmPinEl.value = randomPin;
-
-                        // Show the generated PIN briefly
-                        const btn = document.getElementById('generate-random-pin');
-                        if (btn)
-                        {
-                            const originalText = btn.innerHTML;
-                            btn.innerHTML = `🎲 ${randomPin}`;
-
-                            setTimeout(() =>
-                            {
-                                btn.innerHTML = originalText;
-                            }, 3000);
-                        }
-                    }
-
-                    // ============ CLOUD SYNC & AUTHENTICATION ============
-                    setupCloudEventListeners()
-                    {
-                        // Authentication form switching
-                        document.getElementById('show-sign-up')?.addEventListener('click', () => this.showSignUpForm());
-                        document.getElementById('show-sign-in')?.addEventListener('click', () => this.showSignInForm());
-
-                        // Authentication actions
-                        document.getElementById('sign-up')?.addEventListener('click', () => this.signUp());
-                        document.getElementById('sign-in')?.addEventListener('click', () => this.signIn());
-                        document.getElementById('sign-out')?.addEventListener('click', () => this.signOut());
-
-                        // Sync operations
-                        document.getElementById('sync-to-cloud')?.addEventListener('click', () => this.syncToCloud());
-                        document.getElementById('sync-from-cloud')?.addEventListener('click', () => this.syncFromCloud());
-                        document.getElementById('force-sync')?.addEventListener('click', () => this.forceSync());
-
-                        // Backup operations
-                        document.getElementById('create-backup')?.addEventListener('click', () => this.createBackup());
-                        document.getElementById('test-connection')?.addEventListener('click', () => this.testConnection());
-                        document.getElementById('export-cloud-data')?.addEventListener('click', () => this.exportCloudData());
-
-                        // Enter key handlers
-                        document.getElementById('auth-password')?.addEventListener('keypress', (e) =>
-                        {
-                            if (e.key === 'Enter') this.signIn();
-                        });
-                        document.getElementById('signup-confirm')?.addEventListener('keypress', (e) =>
-                        {
-                            if (e.key === 'Enter') this.signUp();
-                        });
-                    }
-
-                    async initializeSupabaseFeatures()
-                    {
-                        try
-                        {
-                            await this.checkSupabaseStatus();
-                        } catch (error)
-                        {
-                            console.error('❌ Failed to initialize Supabase features:', error);
-                        }
-                    }
-
-                    async checkSupabaseStatus()
-                    {
-                        try
-                        {
-                            console.log('🔍 Checking Supabase connection status...');
-
-                            const response = await this.sendMessage({ action: 'getSupabaseStatus' });
-
-                            if (response.status.connected)
-                            {
-                                this.updateConnectionStatus('Connected', response.status.project || 'Fokus Database', 'Authenticated');
-
-                                if (response.isAuthenticated && response.user)
-                                {
-                                    this.showUserDashboard(response.user);
-                                } else
-                                {
-                                    this.showSignInForm();
-                                }
-                            } else
-                            {
-                                this.updateConnectionStatus('Not Connected', response.status.reason, 'Not authenticated');
-                                this.showSignInForm();
-                            }
-                        } catch (error)
-                        {
-                            console.error('❌ Failed to check Supabase status:', error);
-                            this.updateConnectionStatus('Error', 'Connection failed', 'Error');
-                            this.showSignInForm();
-                        }
-                    }
-
-                    updateConnectionStatus(status, project, auth)
-                    {
-                        const elements = {
-                            connectionState: document.getElementById('connection-state'),
-                            projectName: document.getElementById('project-name'),
-                            authState: document.getElementById('auth-state')
-                        };
-
-                        if (elements.connectionState)
-                        {
-                            elements.connectionState.textContent = status;
-                            elements.connectionState.style.color = status === 'Connected' ? '#4CAF50' :
-                                status === 'Not Connected' ? '#ff9800' : '#f44336';
-                        }
-
-                        if (elements.projectName)
-                        {
-                            elements.projectName.textContent = project;
-                        }
-
-                        if (elements.authState)
-                        {
-                            elements.authState.textContent = auth;
-                            elements.authState.style.color = auth === 'Authenticated' ? '#4CAF50' : '#666';
-                        }
-                    }
-
-                    showSignInForm()
-                    {
-                        this.hideAllAuthForms();
-                        const signInForm = document.getElementById('sign-in-form');
-                        if (signInForm)
-                        {
-                            signInForm.classList.add('active');
-                        }
-                    }
-
-                    showSignUpForm()
-                    {
-                        this.hideAllAuthForms();
-                        const signUpForm = document.getElementById('sign-up-form');
-                        if (signUpForm)
-                        {
-                            signUpForm.classList.add('active');
-                        }
-                    }
-
-                    showUserDashboard(user)
-                    {
-                        this.hideAllAuthForms();
-                        const dashboard = document.getElementById('user-dashboard');
-                        if (dashboard)
-                        {
-                            dashboard.classList.add('active');
-
-                            const emailElement = document.getElementById('current-user-email');
-                            if (emailElement)
-                            {
-                                emailElement.textContent = user.email;
-                            }
-
-                            this.loadSyncStatus();
-                            this.loadCloudBackups();
-                            this.loadSyncStatistics();
-                        }
-                    }
-
-                    hideAllAuthForms()
-                    {
-                        const forms = ['sign-in-form', 'sign-up-form', 'user-dashboard'];
-                        forms.forEach(formId =>
-                        {
-                            const form = document.getElementById(formId);
-                            if (form)
-                            {
-                                form.classList.remove('active');
-                            }
-                        });
-                    }
-
-                    async signUp()
-                    {
-                        const email = document.getElementById('signup-email')?.value.trim();
-                        const password = document.getElementById('signup-password')?.value;
-                        const confirm = document.getElementById('signup-confirm')?.value;
-                        const messageEl = document.getElementById('signup-message');
-
-                        if (!email || !password || !confirm)
-                        {
-                            this.showMessage(messageEl, 'Please fill in all fields.', 'error');
-                            return;
-                        }
-
-                        if (password !== confirm)
-                        {
-                            this.showMessage(messageEl, 'Passwords do not match.', 'error');
-                            return;
-                        }
-
-                        if (password.length < 6)
-                        {
-                            this.showMessage(messageEl, 'Password must be at least 6 characters.', 'error');
-                            return;
-                        }
-
-                        try
-                        {
-                            this.showMessage(messageEl, 'Creating account...', 'info');
-
-                            const response = await this.sendMessage({
-                                action: 'signUp',
-                                email,
-                                password
-                            });
-
-                            if (response.success)
-                            {
-                                if (response.needsConfirmation)
-                                {
-                                    this.showMessage(messageEl, '✅ Account created! Please check your email for confirmation, then sign in.', 'success');
-                                    setTimeout(() => this.showSignInForm(), 3000);
-                                } else
-                                {
-                                    this.showMessage(messageEl, '✅ Account created and signed in successfully!', 'success');
-                                    setTimeout(() =>
-                                    {
-                                        this.showUserDashboard(response.user);
-                                        this.checkSupabaseStatus();
-                                    }, 1500);
-                                }
-                            }
-                        } catch (error)
-                        {
-                            this.showMessage(messageEl, `❌ Sign up failed: ${error.message}`, 'error');
-                        }
-                    }
-
-                    async signIn()
-                    {
-                        const email = document.getElementById('auth-email')?.value.trim();
-                        const password = document.getElementById('auth-password')?.value;
-                        const messageEl = document.getElementById('auth-message');
-
-                        if (!email || !password)
-                        {
-                            this.showMessage(messageEl, 'Please enter email and password.', 'error');
-                            return;
-                        }
-
-                        try
-                        {
-                            this.showMessage(messageEl, 'Signing in...', 'info');
-
-                            const response = await this.sendMessage({
-                                action: 'signIn',
-                                email,
-                                password
-                            });
-
-                            if (response.success)
-                            {
-                                this.showMessage(messageEl, '✅ Signed in successfully!', 'success');
-                                setTimeout(() =>
-                                {
-                                    this.showUserDashboard(response.user);
-                                    this.checkSupabaseStatus();
-                                    this.loadAllSettings(); // Reload settings after sign in
-                                }, 1500);
-                            }
-                        } catch (error)
-                        {
-                            this.showMessage(messageEl, `❌ Sign in failed: ${error.message}`, 'error');
-                        }
-                    }
-
-                    async signOut()
-                    {
-                        if (!confirm('Sign out and stop cloud sync?')) return;
-
-                        try
-                        {
-                            const response = await this.sendMessage({ action: 'signOut' });
-
-                            if (response.success)
-                            {
-                                this.showSignInForm();
-                                this.updateConnectionStatus('Connected', 'Fokus Database', 'Not authenticated');
-                                this
+                });
+            } catch (error)
+            {
+                console.error('Failed to send message:', error);
+                reject(error);
+            }
+        });
+    }
+
+    escapeHtml(text)
+    {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    isValidDomain(domain)
+    {
+        const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/;
+        return domainRegex.test(domain) && domain.includes('.');
+    }
+
+    isValidGitHubRawUrl(url)
+    {
+        return url.startsWith('https://raw.githubusercontent.com/') && url.split('/').length >= 7;
+    }
+
+    estimateDataSize()
+    {
+        // Rough estimate of current settings size
+        try
+        {
+            const sampleData = {
+                blockedKeywords: this.defaultKeywords,
+                customDomains: ['example.com'],
+                blocklistUrls: [],
+                isActive: true
+            };
+            return JSON.stringify(sampleData).length * 2; // Conservative estimate
+        } catch (error)
+        {
+            return 1024; // 1KB fallback
+        }
+    }
+
+    // Global functions for HTML onclick handlers
+    window.testKeyword = function ()
+    {
+        if (optionsManager) optionsManager.testKeyword();
+    };
+
+    window.testGoogleSearch = function ()
+    {
+        if (optionsManager) optionsManager.testGoogleSearch();
+    };
+
+    window.testDirectURL = function ()
+    {
+        if (optionsManager) optionsManager.testDirectURL();
+    };
+
+    window.clearConsole = function ()
+    {
+        if (optionsManager) optionsManager.clearConsole();
+    };
+
+    testKeyword()
+    {
+        const input = document.getElementById('test-input');
+        const result = document.getElementById('keyword-result');
+        const value = input.value.toLowerCase();
+
+        console.log('🔧 Testing keyword:', value);
+
+        // Test against common blocked keywords
+        const testKeywords = ['porn', 'xxx', 'sex', 'adult', 'nude', 'naked'];
+        const found = testKeywords.find(k => value.includes(k));
+
+        if (found)
+        {
+            result.innerHTML = `<div class="result error">⚠️ Keyword "${found}" detected in "${value}"</div>`;
+            console.log('🚫 Keyword detected:', found);
+        } else
+        {
+            result.innerHTML = `<div class="result success">✅ No blocked keywords found in "${value}"</div>`;
+            console.log('✅ No keywords detected');
+        }
+    }
+
+    testGoogleSearch()
+    {
+        console.log('🔧 Testing Google search navigation...');
+        const result = document.getElementById('url-result');
+        result.innerHTML = '<div class="result info">🔄 Testing Google search URL...</div>';
+
+        // Try to navigate to Google search
+        const searchURL = 'https://www.google.com/search?q=porn&uact=5';
+        console.log('🔧 Navigating to:', searchURL);
+
+        setTimeout(() =>
+        {
+            window.location.href = searchURL;
+        }, 1000);
+    }
+
+    testDirectURL()
+    {
+        console.log('🔧 Testing direct URL navigation...');
+        const result = document.getElementById('url-result');
+        result.innerHTML = '<div class="result info">🔄 Testing direct navigation...</div>';
+
+        // Test URL that should be blocked
+        window.location.href = 'https://www.google.com/search?q=adult+content&uact=5';
+    }
+
+    clearConsole()
+    {
+        console.clear();
+        console.log('🔧 Console cleared - Debug test page ready');
+    }
+
+    formatBytes(bytes)
+    {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+}
+}
+
+// Global instance for HTML onclick handlers
+let optionsManager;
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', async () =>
+{
+    console.log('🚀 Options page DOM loaded, initializing...');
+
+    try
+    {
+        // Check if all required elements exist
+        const requiredElements = [
+            'current-pin-display', 'keywords-list', 'domains-list'
+        ];
+
+        const missingElements = requiredElements.filter(id => !document.getElementById(id));
+
+        if (missingElements.length > 0)
+        {
+            console.error('Missing required elements:', missingElements);
+            throw new Error(`Missing elements: ${missingElements.join(', ')}`);
+        }
+
+        // Initialize options manager
+        optionsManager = new OptionsManager();
+        optionsManager.setupGlobalEventHandlers(); // Make available globally
+        await optionsManager.init();
+
+        console.log('✅ Options page initialized successfully');
+
+        // Handle URL hash for direct navigation
+        const hash = window.location.hash;
+        if (hash)
+        {
+            setTimeout(() =>
+            {
+                const element = document.querySelector(hash);
+                if (element)
+                {
+                    element.scrollIntoView({ behavior: 'smooth' });
+                }
+            }, 500);
+        }
+
+    } catch (error)
+    {
+        console.error('❌ Failed to initialize options page:', error);
+
+        // Show error message to user
+        document.body.innerHTML = `
+            <div style="padding: 40px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: white; font-family: 'Segoe UI', sans-serif;">
+                <div style="max-width: 600px; margin: 0 auto; background: rgba(255, 255, 255, 0.95); color: #333; padding: 40px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);">
+                    <h1 style="color: #e74c3c; margin-bottom: 20px;">⚠️ Settings Error</h1>
+                    <p style="margin-bottom: 20px; line-height: 1.6;">Failed to initialize Fokus settings page. This might be due to:</p>
+                    <ul style="text-align: left; margin: 20px 0; line-height: 1.8;">
+                        <li>Browser extension permissions</li>
+                        <li>Corrupted extension files</li>
+                        <li>Browser compatibility issues</li>
+                        <li>Missing configuration files</li>
+                    </ul>
+                    <div style="margin: 30px 0;">
+                        <button onclick="location.reload()" style="background: #4CAF50; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; margin: 5px; font-size: 14px;">
+                            🔄 Refresh Page
+                        </button>
+                        <button onclick="chrome.management.uninstall(chrome.runtime.id)" style="background: #e74c3c; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; margin: 5px; font-size: 14px;">
+                            🗑️ Reinstall Extension
+                        </button>
+                    </div>
+                    <details style="text-align: left; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                        <summary style="cursor: pointer; font-weight: bold;">Technical Details</summary>
+                        <pre style="margin-top: 10px; font-size: 12px; color: #666; white-space: pre-wrap;">${error.message}\n\nStack: ${error.stack}</pre>
+                    </details>
+                </div>
+            </div>
+        `;
+    }
+});
+
+// Handle page unload
+window.addEventListener('beforeunload', () =>
+{
+    console.log('👋 Options page unloading...');
+});
+
+// Handle visibility changes
+document.addEventListener('visibilitychange', () =>
+{
+    if (!document.hidden && optionsManager && optionsManager.isInitialized)
+    {
+        // Refresh data when page becomes visible
+        setTimeout(() =>
+        {
+            optionsManager.loadAllSettings();
+        }, 1000);
+    }
+});
+
+// Export for use in HTML
+if (typeof module !== 'undefined' && module.exports)
+{
+    module.exports = OptionsManager;
+} else
+{
+    window.OptionsManager = OptionsManager;
+}

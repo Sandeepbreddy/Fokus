@@ -727,20 +727,22 @@
                     </div>
                 </div>
 
+                <!-- Replace the popular blocklist buttons section in options.html with this CSP-safe version -->
+
                 <!-- Popular Sources -->
                 <div style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-radius: 12px; padding: 20px;">
                     <h4 style="color: #1976d2; margin-bottom: 15px;">⭐ Popular Blocklist Sources</h4>
                     <div style="display: flex; flex-wrap: wrap; gap: 10px;">
                         <button class="btn btn-info" style="font-size: 12px; padding: 10px 14px;"
-                            onclick="optionsManager.addPopularBlocklist('stevenblack-porn-only')">
+                            data-popular-blocklist="stevenblack-porn-only">
                             StevenBlack Porn Only
                         </button>
                         <button class="btn btn-info" style="font-size: 12px; padding: 10px 14px;"
-                            onclick="optionsManager.addPopularBlocklist('stevenblack-porn-social')">
+                            data-popular-blocklist="stevenblack-porn-social">
                             StevenBlack Porn + Social
                         </button>
                         <button class="btn btn-info" style="font-size: 12px; padding: 10px 14px;"
-                            onclick="optionsManager.addPopularBlocklist('energized-porn')">
+                            data-popular-blocklist="energized-porn">
                             Energized Porn Pack
                         </button>
                     </div>

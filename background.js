@@ -1,7 +1,253 @@
-// background.js - Updated with Hybrid Authentication Approach
-// Import Supabase client
-importScripts('supabase-client.js');
+// background.js - Complete rewrite with robust error handling
 
+console.log('🚀 Fokus Extension - Background Script Starting...');
+
+// ============ SUPABASE CLIENT CLASS ============
+class SupabaseClient
+{
+    constructor()
+    {
+        this.supabaseUrl = null;
+        this.supabaseKey = null;
+        this.headers = {};
+        this.currentUser = null;
+        this.isInitialized = false;
+        this.config = null;
+    }
+
+    async init()
+    {
+        if (this.isInitialized) return true;
+
+        try
+        {
+            console.log('🔄 Initializing Supabase client...');
+
+            // Load config
+            const configUrl = chrome.runtime.getURL('config.json');
+            const response = await fetch(configUrl);
+
+            if (!response.ok)
+            {
+                throw new Error('Config file not found');
+            }
+
+            this.config = await response.json();
+
+            if (!this.config?.supabase?.url || !this.config?.supabase?.anonKey)
+            {
+                throw new Error('Invalid Supabase configuration');
+            }
+
+            this.supabaseUrl = this.config.supabase.url;
+            this.supabaseKey = this.config.supabase.anonKey;
+            this.headers = {
+                'apikey': this.supabaseKey,
+                'Authorization': `Bearer ${this.supabaseKey}`,
+                'Content-Type': 'application/json'
+            };
+
+            // Check for stored session
+            const session = await this.getStoredSession();
+            if (session?.access_token)
+            {
+                this.currentUser = session.user;
+                this.headers['Authorization'] = `Bearer ${session.access_token}`;
+            }
+
+            this.isInitialized = true;
+            console.log('✅ Supabase client initialized');
+            return true;
+        } catch (error)
+        {
+            console.error('❌ Supabase initialization failed:', error);
+            return false;
+        }
+    }
+
+    async makeRequest(method, endpoint, body = null)
+    {
+        if (!this.isInitialized)
+        {
+            throw new Error('Supabase client not initialized');
+        }
+
+        const url = `${this.supabaseUrl}/rest/v1/${endpoint}`;
+        const options = {
+            method,
+            headers: { ...this.headers }
+        };
+
+        if (body)
+        {
+            options.body = JSON.stringify(body);
+        }
+
+        const response = await fetch(url, options);
+
+        if (!response.ok)
+        {
+            const errorText = await response.text();
+            throw new Error(`API request failed: ${response.status} - ${errorText}`);
+        }
+
+        return response.json();
+    }
+
+    async signUp(email, password)
+    {
+        if (!this.isInitialized)
+        {
+            throw new Error('Supabase client not initialized');
+        }
+
+        const response = await fetch(`${this.supabaseUrl}/auth/v1/signup`, {
+            method: 'POST',
+            headers: {
+                'apikey': this.supabaseKey,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok)
+        {
+            throw new Error(data.msg || data.message || 'Sign up failed');
+        }
+
+        if (data.user)
+        {
+            this.currentUser = data.user;
+            if (data.session)
+            {
+                await this.storeSession(data.session);
+                this.headers['Authorization'] = `Bearer ${data.session.access_token}`;
+            }
+        }
+
+        return {
+            success: true,
+            user: data.user,
+            needsConfirmation: !data.session
+        };
+    }
+
+    async signIn(email, password)
+    {
+        if (!this.isInitialized)
+        {
+            throw new Error('Supabase client not initialized');
+        }
+
+        const response = await fetch(`${this.supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: 'POST',
+            headers: {
+                'apikey': this.supabaseKey,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok)
+        {
+            throw new Error(data.msg || data.message || 'Invalid credentials');
+        }
+
+        this.currentUser = data.user;
+        const session = data.session || data;
+        await this.storeSession(session);
+        this.headers['Authorization'] = `Bearer ${session.access_token}`;
+
+        return { success: true, user: data.user };
+    }
+
+    async signOut()
+    {
+        if (this.isInitialized && this.currentUser)
+        {
+            try
+            {
+                await fetch(`${this.supabaseUrl}/auth/v1/logout`, {
+                    method: 'POST',
+                    headers: this.headers
+                });
+            } catch (error)
+            {
+                console.warn('Sign out API call failed, continuing with local sign out');
+            }
+        }
+
+        this.currentUser = null;
+        this.headers['Authorization'] = `Bearer ${this.supabaseKey}`;
+        await this.clearStoredSession();
+        return { success: true };
+    }
+
+    async storeSession(session)
+    {
+        await chrome.storage.local.set({
+            supabaseSession: {
+                access_token: session.access_token,
+                refresh_token: session.refresh_token,
+                user: session.user,
+                expires_at: session.expires_at
+            }
+        });
+    }
+
+    async getStoredSession()
+    {
+        const data = await chrome.storage.local.get(['supabaseSession']);
+        return data.supabaseSession;
+    }
+
+    async clearStoredSession()
+    {
+        await chrome.storage.local.remove(['supabaseSession']);
+    }
+
+    isAuthenticated()
+    {
+        return !!this.currentUser;
+    }
+
+    getCurrentUser()
+    {
+        return this.currentUser;
+    }
+
+    async getConnectionStatus()
+    {
+        if (!this.isInitialized)
+        {
+            return { connected: false, reason: 'Not initialized' };
+        }
+
+        try
+        {
+            const testUrl = `${this.supabaseUrl}/rest/v1/user_profiles?limit=1`;
+            const response = await fetch(testUrl, {
+                method: 'HEAD',
+                headers: this.headers
+            });
+
+            return {
+                connected: response.ok,
+                project: this.config?.supabase?.projectName || 'Fokus',
+                reason: response.ok ? 'Connected' : `HTTP ${response.status}`
+            };
+        } catch (error)
+        {
+            return { connected: false, reason: error.message };
+        }
+    }
+}
+
+// ============ CONTENT BLOCKER CLASS ============
 class ContentBlocker
 {
     constructor()
@@ -13,12 +259,11 @@ class ContentBlocker
         this.lastGithubUpdate = 0;
         this.githubUpdateInterval = 24 * 60 * 60 * 1000; // 24 hours
 
-        // Authentication state
-        this.authRequired = true;
+        // Authentication
         this.isAuthenticated = false;
         this.authCheckCompleted = false;
 
-        // Initialize Supabase client
+        // Initialize Supabase
         this.supabase = new SupabaseClient();
 
         this.init();
@@ -26,150 +271,27 @@ class ContentBlocker
 
     async init()
     {
-        console.log('🚀 Initializing Fokus Extension...');
-
-        // Setup install/startup handlers first
-        this.setupAuthenticationFlow();
-
-        await this.loadSettings();
-        await this.initializeSupabase();
-        await this.checkAuthenticationStatus();
-
-        // Only start blocking after auth check
-        if (this.isAuthenticated || await this.checkSkipAuth())
-        {
-            await this.startNormalOperation();
-        } else
-        {
-            console.log('⏸️ Extension paused - authentication required');
-        }
-    }
-
-    setupAuthenticationFlow()
-    {
-        // Handle extension install
-        chrome.runtime.onInstalled.addListener(async (details) =>
-        {
-            console.log('📦 Extension installed/updated:', details.reason);
-
-            if (details.reason === 'install')
-            {
-                // Show welcome screen with auth prompt immediately
-                await this.showAuthenticationRequired('install');
-            } else if (details.reason === 'update')
-            {
-                // Check if user was authenticated before update
-                const data = await chrome.storage.local.get(['wasAuthenticated']);
-                if (data.wasAuthenticated && !this.supabase.isAuthenticated())
-                {
-                    await this.showAuthenticationRequired('update');
-                }
-            }
-        });
-
-        // Handle browser startup
-        chrome.runtime.onStartup.addListener(async () =>
-        {
-            console.log('🔄 Browser startup detected');
-            await this.checkAuthenticationStatus();
-
-            if (!this.isAuthenticated)
-            {
-                setTimeout(() =>
-                {
-                    this.showAuthenticationRequired('startup');
-                }, 2000); // Small delay to let browser settle
-            }
-        });
-    }
-
-    async checkAuthenticationStatus()
-    {
-        try
-        {
-            const initialized = await this.supabase.init();
-            if (initialized && this.supabase.isAuthenticated())
-            {
-                this.isAuthenticated = true;
-                await chrome.storage.local.set({ wasAuthenticated: true });
-                console.log('✅ User authenticated:', this.supabase.getCurrentUser()?.email);
-            } else
-            {
-                this.isAuthenticated = false;
-                await chrome.storage.local.set({ wasAuthenticated: false });
-                console.log('❌ User not authenticated');
-            }
-            this.authCheckCompleted = true;
-        } catch (error)
-        {
-            console.error('Auth check failed:', error);
-            this.authCheckCompleted = true;
-        }
-    }
-
-    async checkSkipAuth()
-    {
-        // Allow skipping auth in development or if explicitly set
-        const data = await chrome.storage.local.get(['skipAuthForTesting', 'allowOfflineMode']);
-        return data.skipAuthForTesting || data.allowOfflineMode;
-    }
-
-    async showAuthenticationRequired(reason = 'general')
-    {
-        const authUrl = chrome.runtime.getURL('auth-required.html') + `?reason=${reason}`;
+        console.log('🔧 Initializing Content Blocker...');
 
         try
         {
-            // Create new tab for authentication
-            const tab = await chrome.tabs.create({
-                url: authUrl,
-                active: true
-            });
+            // Load basic settings first
+            await this.loadSettings();
 
-            console.log(`🔐 Authentication required (${reason}) - opened tab:`, tab.id);
+            // Setup event handlers
+            this.setupEventHandlers();
 
-            // Store auth tab ID to prevent multiple opens
-            await chrome.storage.local.set({ authTabId: tab.id });
+            // Initialize Supabase (don't block on this)
+            this.initializeSupabase();
 
+            // Start basic blocking functionality
+            this.setupBlocking();
+
+            console.log('✅ Content Blocker initialized');
         } catch (error)
         {
-            console.error('Failed to open auth tab:', error);
+            console.error('❌ Content Blocker initialization failed:', error);
         }
-    }
-
-    async startNormalOperation()
-    {
-        console.log('▶️ Starting normal extension operation...');
-
-        await this.updateBlocklist();
-        this.setupRequestInterceptor();
-        this.setupTabUpdatedListener();
-
-        // Setup auto-sync if authenticated
-        if (this.isAuthenticated)
-        {
-            await this.supabase.setupAutoSync();
-
-            // Sync from cloud on startup
-            try
-            {
-                const result = await this.supabase.syncFromCloud();
-                console.log('Startup sync result:', result);
-
-                if (result.action === 'downloaded')
-                {
-                    await this.loadSettings();
-                }
-            } catch (error)
-            {
-                console.error('Startup sync failed:', error);
-            }
-        }
-
-        // Update blocklist periodically
-        setInterval(() => this.updateBlocklist(), this.githubUpdateInterval);
-
-        console.log('✅ Extension fully operational');
     }
 
     async initializeSupabase()
@@ -179,39 +301,163 @@ class ContentBlocker
             const initialized = await this.supabase.init();
             if (initialized)
             {
-                console.log('☁️ Supabase initialized successfully');
-                return true;
+                console.log('☁️ Supabase available');
+                await this.checkAuthenticationStatus();
+
+                // Show auth screen on first install
+                const data = await chrome.storage.local.get(['hasShownAuth']);
+                if (!data.hasShownAuth)
+                {
+                    await this.showAuthenticationRequired('install');
+                    await chrome.storage.local.set({ hasShownAuth: true });
+                }
             } else
             {
-                console.log('⚠️ Supabase not configured - offline mode');
-                return false;
+                console.log('⚠️ Supabase not available - offline mode');
+                this.isAuthenticated = true; // Allow offline usage
+            }
+            this.authCheckCompleted = true;
+        } catch (error)
+        {
+            console.error('❌ Supabase initialization error:', error);
+            this.isAuthenticated = true; // Allow offline usage
+            this.authCheckCompleted = true;
+        }
+    }
+
+    async checkAuthenticationStatus()
+    {
+        try
+        {
+            if (this.supabase.isAuthenticated())
+            {
+                this.isAuthenticated = true;
+                console.log('✅ User authenticated:', this.supabase.getCurrentUser()?.email);
+            } else
+            {
+                this.isAuthenticated = false;
+                console.log('❌ User not authenticated');
             }
         } catch (error)
         {
-            console.error('Failed to initialize Supabase:', error);
-            return false;
+            console.error('❌ Auth check failed:', error);
+            this.isAuthenticated = false;
+        }
+    }
+
+    setupEventHandlers()
+    {
+        // Handle extension install/update
+        chrome.runtime.onInstalled.addListener(async (details) =>
+        {
+            console.log('📦 Extension event:', details.reason);
+
+            if (details.reason === 'install')
+            {
+                console.log('🎉 First time install');
+            }
+        });
+
+        // Handle browser startup
+        chrome.runtime.onStartup.addListener(() =>
+        {
+            console.log('🔄 Browser startup');
+        });
+    }
+
+    setupBlocking()
+    {
+        // Monitor tab updates for blocking
+        chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) =>
+        {
+            if (changeInfo.status === 'loading' && tab.url)
+            {
+                await this.checkAndBlockTab(tabId, tab.url);
+            }
+        });
+
+        // Monitor tab creation
+        chrome.tabs.onCreated.addListener(async (tab) =>
+        {
+            if (tab.url)
+            {
+                await this.checkAndBlockTab(tab.id, tab.url);
+            }
+        });
+
+        // Monitor navigation
+        chrome.webNavigation.onBeforeNavigate.addListener(async (details) =>
+        {
+            if (details.frameId === 0)
+            {
+                await this.checkAndBlockTab(details.tabId, details.url);
+            }
+        });
+    }
+
+    async checkAndBlockTab(tabId, url)
+    {
+        try
+        {
+            const urlObj = new URL(url);
+
+            // Skip extension pages
+            if (urlObj.protocol === 'chrome-extension:') return;
+
+            // Check domain blocking
+            if (await this.isDomainBlocked(urlObj.hostname))
+            {
+                const blockedUrl = chrome.runtime.getURL('blocked.html') +
+                    '?domain=' + encodeURIComponent(urlObj.hostname);
+                chrome.tabs.update(tabId, { url: blockedUrl });
+                this.incrementBlockCount();
+                return;
+            }
+
+            // Check Google search blocking
+            if (urlObj.hostname.includes('google.com') && urlObj.pathname.includes('/search'))
+            {
+                const query = urlObj.searchParams.get('q');
+                if (query && await this.containsBlockedKeywords(query))
+                {
+                    const blockedUrl = chrome.runtime.getURL('blocked.html') +
+                        '?reason=search&query=' + encodeURIComponent(query);
+                    chrome.tabs.update(tabId, { url: blockedUrl });
+                    this.incrementBlockCount();
+                    return;
+                }
+            }
+        } catch (error)
+        {
+            // Ignore invalid URLs
         }
     }
 
     async loadSettings()
     {
-        const data = await chrome.storage.local.get([
-            'customDomains', 'blockedKeywords', 'isActive', 'pin',
-            'blockedDomains', 'lastGithubUpdate'
-        ]);
-
-        this.customDomains = new Set(data.customDomains || []);
-        this.blockedKeywords = new Set(data.blockedKeywords || this.getDefaultKeywords());
-        this.isActive = data.isActive !== undefined ? data.isActive : true;
-        this.blockedDomains = new Set(data.blockedDomains || []);
-        this.lastGithubUpdate = data.lastGithubUpdate || 0;
-
-        // Set default PIN if none exists (always local)
-        if (!data.pin)
+        try
         {
-            const defaultPin = '1234';
-            await chrome.storage.local.set({ pin: defaultPin });
-            console.log('🔑 Default PIN set:', defaultPin);
+            const data = await chrome.storage.local.get([
+                'customDomains', 'blockedKeywords', 'isActive', 'pin',
+                'blockedDomains', 'lastGithubUpdate'
+            ]);
+
+            this.customDomains = new Set(data.customDomains || []);
+            this.blockedKeywords = new Set(data.blockedKeywords || this.getDefaultKeywords());
+            this.isActive = data.isActive !== undefined ? data.isActive : true;
+            this.blockedDomains = new Set(data.blockedDomains || []);
+            this.lastGithubUpdate = data.lastGithubUpdate || 0;
+
+            // Set default PIN if none exists
+            if (!data.pin)
+            {
+                await chrome.storage.local.set({ pin: '1234' });
+            }
+
+            console.log('✅ Settings loaded');
+        } catch (error)
+        {
+            console.error('❌ Failed to load settings:', error);
         }
     }
 
@@ -224,15 +470,8 @@ class ContentBlocker
         ];
     }
 
-    // Enhanced blocking methods with auth checks
     async isDomainBlocked(hostname)
     {
-        // If auth required but not authenticated, redirect to auth
-        if (this.authRequired && !this.isAuthenticated && this.authCheckCompleted)
-        {
-            return 'auth-required';
-        }
-
         if (!this.isActive) return false;
 
         // Check custom domains
@@ -257,12 +496,6 @@ class ContentBlocker
 
     async containsBlockedKeywords(text)
     {
-        // If auth required but not authenticated, return blocked
-        if (this.authRequired && !this.isAuthenticated && this.authCheckCompleted)
-        {
-            return true;
-        }
-
         if (!this.isActive) return false;
 
         const lowerText = text.toLowerCase();
@@ -274,317 +507,6 @@ class ContentBlocker
             }
         }
         return false;
-    }
-
-    setupTabUpdatedListener()
-    {
-        // Monitor tab updates for domain blocking
-        chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) =>
-        {
-            if (changeInfo.status === 'loading' && tab.url)
-            {
-                try
-                {
-                    const url = new URL(tab.url);
-
-                    // Skip extension pages
-                    if (url.protocol === 'chrome-extension:') return;
-
-                    const blockResult = await this.isDomainBlocked(url.hostname);
-
-                    // Handle auth required
-                    if (blockResult === 'auth-required')
-                    {
-                        const authUrl = chrome.runtime.getURL('auth-required.html') + '?reason=blocking';
-                        chrome.tabs.update(tabId, { url: authUrl });
-                        return;
-                    }
-
-                    // Check for Google search URLs specifically
-                    if (url.hostname.includes('google.com') && url.pathname.includes('/search'))
-                    {
-                        const searchQuery = url.searchParams.get('q');
-                        if (searchQuery && await this.containsBlockedKeywords(searchQuery))
-                        {
-                            console.log('Background: Blocking Google search for:', searchQuery);
-                            const blockedUrl = chrome.runtime.getURL('blocked.html') +
-                                '?reason=search&keyword=' + encodeURIComponent(searchQuery) +
-                                '&query=' + encodeURIComponent(searchQuery);
-                            chrome.tabs.update(tabId, { url: blockedUrl });
-                            this.incrementBlockCount();
-                            return;
-                        }
-                    }
-
-                    // Regular domain blocking
-                    if (blockResult === true)
-                    {
-                        const blockedUrl = chrome.runtime.getURL('blocked.html') +
-                            '?domain=' + encodeURIComponent(url.hostname);
-                        chrome.tabs.update(tabId, { url: blockedUrl });
-                        this.incrementBlockCount();
-                    }
-                } catch (error)
-                {
-                    // Ignore invalid URLs
-                }
-            }
-        });
-
-        // Monitor tab creation for immediate blocking
-        chrome.tabs.onCreated.addListener(async (tab) =>
-        {
-            if (tab.url)
-            {
-                try
-                {
-                    const url = new URL(tab.url);
-
-                    // Skip extension pages
-                    if (url.protocol === 'chrome-extension:') return;
-
-                    const blockResult = await this.isDomainBlocked(url.hostname);
-
-                    // Handle auth required
-                    if (blockResult === 'auth-required')
-                    {
-                        const authUrl = chrome.runtime.getURL('auth-required.html') + '?reason=blocking';
-                        chrome.tabs.update(tab.id, { url: authUrl });
-                        return;
-                    }
-
-                    // Check for Google search URLs
-                    if (url.hostname.includes('google.com') && url.pathname.includes('/search'))
-                    {
-                        const searchQuery = url.searchParams.get('q');
-                        if (searchQuery && await this.containsBlockedKeywords(searchQuery))
-                        {
-                            console.log('Background: Blocking new Google search tab for:', searchQuery);
-                            const blockedUrl = chrome.runtime.getURL('blocked.html') +
-                                '?reason=search&keyword=' + encodeURIComponent(searchQuery) +
-                                '&query=' + encodeURIComponent(searchQuery);
-                            chrome.tabs.update(tab.id, { url: blockedUrl });
-                            this.incrementBlockCount();
-                            return;
-                        }
-                    }
-
-                    if (blockResult === true)
-                    {
-                        const blockedUrl = chrome.runtime.getURL('blocked.html') +
-                            '?domain=' + encodeURIComponent(url.hostname);
-                        chrome.tabs.update(tab.id, { url: blockedUrl });
-                        this.incrementBlockCount();
-                    }
-                } catch (error)
-                {
-                    // Ignore invalid URLs
-                }
-            }
-        });
-
-        // Monitor navigation attempts
-        chrome.webNavigation.onBeforeNavigate.addListener(async (details) =>
-        {
-            if (details.frameId === 0)
-            { // Main frame only
-                try
-                {
-                    const url = new URL(details.url);
-
-                    // Skip extension pages
-                    if (url.protocol === 'chrome-extension:') return;
-
-                    const blockResult = await this.isDomainBlocked(url.hostname);
-
-                    // Handle auth required
-                    if (blockResult === 'auth-required')
-                    {
-                        const authUrl = chrome.runtime.getURL('auth-required.html') + '?reason=blocking';
-                        chrome.tabs.update(details.tabId, { url: authUrl });
-                        return;
-                    }
-
-                    // Check for Google search URLs
-                    if (url.hostname.includes('google.com') && url.pathname.includes('/search'))
-                    {
-                        const searchQuery = url.searchParams.get('q');
-                        if (searchQuery && await this.containsBlockedKeywords(searchQuery))
-                        {
-                            console.log('Background: Blocking navigation to Google search for:', searchQuery);
-                            const blockedUrl = chrome.runtime.getURL('blocked.html') +
-                                '?reason=search&keyword=' + encodeURIComponent(searchQuery) +
-                                '&query=' + encodeURIComponent(searchQuery);
-                            chrome.tabs.update(details.tabId, { url: blockedUrl });
-                            this.incrementBlockCount();
-                            return;
-                        }
-                    }
-
-                    if (blockResult === true)
-                    {
-                        const blockedUrl = chrome.runtime.getURL('blocked.html') +
-                            '?domain=' + encodeURIComponent(url.hostname);
-                        chrome.tabs.update(details.tabId, { url: blockedUrl });
-                        this.incrementBlockCount();
-                    }
-                } catch (error)
-                {
-                    // Ignore invalid URLs
-                }
-            }
-        });
-    }
-
-    // Method to enable offline mode temporarily
-    async enableOfflineMode(duration = 3600000)
-    { // 1 hour default
-        await chrome.storage.local.set({
-            allowOfflineMode: true,
-            offlineModeExpiry: Date.now() + duration
-        });
-
-        this.isAuthenticated = true; // Temporary override
-        await this.startNormalOperation();
-
-        console.log('⚠️ Offline mode enabled for', duration / 60000, 'minutes');
-    }
-
-    // Method to handle successful authentication
-    async onAuthenticationSuccess(user)
-    {
-        console.log('🎉 Authentication successful:', user.email);
-
-        this.isAuthenticated = true;
-        await chrome.storage.local.set({ wasAuthenticated: true });
-
-        // Close any auth tabs
-        const data = await chrome.storage.local.get(['authTabId']);
-        if (data.authTabId)
-        {
-            try
-            {
-                await chrome.tabs.remove(data.authTabId);
-            } catch (error)
-            {
-                // Tab might already be closed
-            }
-            await chrome.storage.local.remove(['authTabId']);
-        }
-
-        // Start normal operation
-        await this.startNormalOperation();
-
-        // Load settings from cloud
-        try
-        {
-            const result = await this.supabase.syncFromCloud();
-            if (result.action === 'downloaded')
-            {
-                await this.loadSettings();
-            }
-        } catch (error)
-        {
-            console.error('Failed to sync from cloud after auth:', error);
-        }
-    }
-
-    // Enhanced authentication handling methods
-    async signInUser(email, password)
-    {
-        try
-        {
-            const result = await this.supabase.signIn(email, password);
-
-            if (result.success)
-            {
-                await this.onAuthenticationSuccess(result.user);
-            }
-
-            return result;
-        } catch (error)
-        {
-            console.error('Failed to sign in user:', error);
-            throw error;
-        }
-    }
-
-    async signUpUser(email, password)
-    {
-        try
-        {
-            const result = await this.supabase.signUp(email, password);
-
-            if (result.success && result.user && !result.needsConfirmation)
-            {
-                await this.onAuthenticationSuccess(result.user);
-            }
-
-            return result;
-        } catch (error)
-        {
-            console.error('Failed to sign up user:', error);
-            throw error;
-        }
-    }
-
-    async signOutUser()
-    {
-        try
-        {
-            const result = await this.supabase.signOut();
-
-            if (result.success)
-            {
-                this.isAuthenticated = false;
-                await chrome.storage.local.set({ wasAuthenticated: false });
-
-                // Show auth required after sign out
-                setTimeout(() =>
-                {
-                    this.showAuthenticationRequired('signout');
-                }, 1000);
-            }
-
-            return result;
-        } catch (error)
-        {
-            console.error('Failed to sign out user:', error);
-            throw error;
-        }
-    }
-
-    // Rest of the methods remain the same as previous implementation
-    // ... (keeping all the existing sync, blocking, and utility methods)
-
-    setupRequestInterceptor()
-    {
-        console.log('Setting up non-blocking request monitoring...');
-    }
-
-    async updateBlocklist()
-    {
-        // Only update if authenticated or in offline mode
-        if (!this.isAuthenticated && !(await this.checkSkipAuth()))
-        {
-            console.log('⏸️ Skipping blocklist update - authentication required');
-            return;
-        }
-
-        const now = Date.now();
-        if (now - this.lastGithubUpdate < this.githubUpdateInterval)
-        {
-            return;
-        }
-
-        try
-        {
-            console.log('🔄 Updating blocklist...');
-            // ... existing updateBlocklist implementation
-        } catch (error)
-        {
-            console.error('Failed to update blocklist:', error);
-        }
     }
 
     async incrementBlockCount()
@@ -604,7 +526,6 @@ class ContentBlocker
             {
                 blocksToday++;
             }
-
             totalBlocks++;
 
             await chrome.storage.local.set({
@@ -612,119 +533,407 @@ class ContentBlocker
                 totalBlocks,
                 lastBlockDate: today
             });
-
-            // Sync stats to cloud if authenticated
-            if (this.isAuthenticated)
-            {
-                clearTimeout(this.statsyncTimeout);
-                this.statsyncTimeout = setTimeout(async () =>
-                {
-                    try
-                    {
-                        await this.supabase.syncToCloud();
-                    } catch (error)
-                    {
-                        console.error('Failed to sync stats to cloud:', error);
-                    }
-                }, 5000);
-            }
         } catch (error)
         {
-            console.error('Failed to increment block count:', error);
+            console.error('❌ Failed to increment block count:', error);
         }
     }
 
-    // All other existing methods remain the same
-    // ... (keeping existing implementation for brevity)
+    async showAuthenticationRequired(reason = 'general')
+    {
+        try
+        {
+            const authUrl = chrome.runtime.getURL('auth-required.html') + `?reason=${reason}`;
+            await chrome.tabs.create({ url: authUrl, active: true });
+        } catch (error)
+        {
+            console.error('❌ Failed to show auth screen:', error);
+        }
+    }
+
+    // ============ API METHODS ============
+
+    async addCustomDomain(domain)
+    {
+        try
+        {
+            const data = await chrome.storage.local.get(['customDomains']);
+            const domains = new Set(data.customDomains || []);
+
+            if (domains.has(domain))
+            {
+                return { success: false, error: 'Domain already blocked' };
+            }
+
+            domains.add(domain);
+            await chrome.storage.local.set({ customDomains: Array.from(domains) });
+            this.customDomains = domains;
+
+            return { success: true };
+        } catch (error)
+        {
+            return { success: false, error: error.message };
+        }
+    }
+
+    async removeCustomDomain(domain)
+    {
+        try
+        {
+            const data = await chrome.storage.local.get(['customDomains']);
+            const domains = new Set(data.customDomains || []);
+
+            domains.delete(domain);
+            await chrome.storage.local.set({ customDomains: Array.from(domains) });
+            this.customDomains = domains;
+
+            return { success: true };
+        } catch (error)
+        {
+            return { success: false, error: error.message };
+        }
+    }
+
+    async addKeyword(keyword)
+    {
+        try
+        {
+            const data = await chrome.storage.local.get(['blockedKeywords']);
+            const keywords = new Set(data.blockedKeywords || []);
+
+            const lowerKeyword = keyword.toLowerCase();
+            if (keywords.has(lowerKeyword))
+            {
+                return { success: false, error: 'Keyword already blocked' };
+            }
+
+            keywords.add(lowerKeyword);
+            await chrome.storage.local.set({ blockedKeywords: Array.from(keywords) });
+            this.blockedKeywords = keywords;
+
+            return { success: true };
+        } catch (error)
+        {
+            return { success: false, error: error.message };
+        }
+    }
+
+    async removeKeyword(keyword)
+    {
+        try
+        {
+            const data = await chrome.storage.local.get(['blockedKeywords']);
+            const keywords = new Set(data.blockedKeywords || []);
+
+            keywords.delete(keyword.toLowerCase());
+            await chrome.storage.local.set({ blockedKeywords: Array.from(keywords) });
+            this.blockedKeywords = keywords;
+
+            return { success: true };
+        } catch (error)
+        {
+            return { success: false, error: error.message };
+        }
+    }
+
+    async setActive(active)
+    {
+        try
+        {
+            await chrome.storage.local.set({ isActive: active });
+            this.isActive = active;
+            return { success: true };
+        } catch (error)
+        {
+            return { success: false, error: error.message };
+        }
+    }
+
+    async getCurrentTab()
+    {
+        try
+        {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            return { url: tab.url };
+        } catch (error)
+        {
+            return { url: null };
+        }
+    }
+
+    async addDomainFromTab()
+    {
+        try
+        {
+            const tabInfo = await this.getCurrentTab();
+            if (!tabInfo.url)
+            {
+                return { success: false, error: 'No active tab' };
+            }
+
+            const url = new URL(tabInfo.url);
+            const result = await this.addCustomDomain(url.hostname);
+
+            if (result.success)
+            {
+                result.domain = url.hostname;
+            }
+
+            return result;
+        } catch (error)
+        {
+            return { success: false, error: error.message };
+        }
+    }
+
+    // ============ AUTH METHODS ============
+
+    async signUp(email, password)
+    {
+        try
+        {
+            if (!this.supabase.isInitialized)
+            {
+                await this.supabase.init();
+            }
+
+            const result = await this.supabase.signUp(email, password);
+
+            if (result.success && result.user && !result.needsConfirmation)
+            {
+                this.isAuthenticated = true;
+                await chrome.storage.local.set({ wasAuthenticated: true });
+            }
+
+            return result;
+        } catch (error)
+        {
+            console.error('❌ Sign up failed:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async signIn(email, password)
+    {
+        try
+        {
+            if (!this.supabase.isInitialized)
+            {
+                await this.supabase.init();
+            }
+
+            const result = await this.supabase.signIn(email, password);
+
+            if (result.success)
+            {
+                this.isAuthenticated = true;
+                await chrome.storage.local.set({ wasAuthenticated: true });
+            }
+
+            return result;
+        } catch (error)
+        {
+            console.error('❌ Sign in failed:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async signOut()
+    {
+        try
+        {
+            if (this.supabase.isInitialized)
+            {
+                await this.supabase.signOut();
+            }
+
+            this.isAuthenticated = false;
+            await chrome.storage.local.set({ wasAuthenticated: false });
+
+            return { success: true };
+        } catch (error)
+        {
+            console.error('❌ Sign out failed:', error);
+            // Always succeed locally
+            this.isAuthenticated = false;
+            await chrome.storage.local.set({ wasAuthenticated: false });
+            return { success: true };
+        }
+    }
+
+    async enableOfflineMode(duration = 3600000)
+    {
+        try
+        {
+            await chrome.storage.local.set({
+                allowOfflineMode: true,
+                offlineModeExpiry: Date.now() + duration
+            });
+
+            this.isAuthenticated = true;
+
+            return { success: true };
+        } catch (error)
+        {
+            return { success: false, error: error.message };
+        }
+    }
+
+    async getSupabaseStatus()
+    {
+        try
+        {
+            const status = await this.supabase.getConnectionStatus();
+            return {
+                status,
+                isAuthenticated: this.supabase.isAuthenticated(),
+                user: this.supabase.getCurrentUser()
+            };
+        } catch (error)
+        {
+            return {
+                status: { connected: false, reason: 'Error: ' + error.message },
+                isAuthenticated: false,
+                user: null
+            };
+        }
+    }
 }
 
-// Initialize the content blocker
+// ============ INITIALIZATION ============
+
 let contentBlocker;
 
 try
 {
-    console.log('🚀 Initializing Fokus content blocker...');
     contentBlocker = new ContentBlocker();
-    console.log('✅ Content blocker initialized successfully');
+    console.log('✅ Content Blocker created successfully');
 } catch (error)
 {
-    console.error('❌ Failed to initialize content blocker:', error);
+    console.error('❌ Failed to create Content Blocker:', error);
 
-    // Create a minimal fallback
+    // Create minimal fallback
     contentBlocker = {
-        async addCustomDomain() { return { success: false, error: 'Service unavailable' }; },
-        async addKeyword() { return { success: false, error: 'Service unavailable' }; },
-        async removeKeyword() { return { success: false, error: 'Service unavailable' }; },
-        async setActive() { return { success: false, error: 'Service unavailable' }; },
-        async updateBlocklist() { return { success: false, error: 'Service unavailable' }; },
-        getDefaultBlocklistUrls() { return []; }
+        addCustomDomain: async () => ({ success: false, error: 'Service unavailable' }),
+        removeCustomDomain: async () => ({ success: false, error: 'Service unavailable' }),
+        addKeyword: async () => ({ success: false, error: 'Service unavailable' }),
+        removeKeyword: async () => ({ success: false, error: 'Service unavailable' }),
+        setActive: async () => ({ success: false, error: 'Service unavailable' }),
+        getCurrentTab: async () => ({ url: null }),
+        addDomainFromTab: async () => ({ success: false, error: 'Service unavailable' }),
+        signUp: async () => ({ success: false, error: 'Service unavailable' }),
+        signIn: async () => ({ success: false, error: 'Service unavailable' }),
+        signOut: async () => ({ success: true }),
+        enableOfflineMode: async () => ({ success: false, error: 'Service unavailable' }),
+        getSupabaseStatus: async () => ({
+            status: { connected: false, reason: 'Service unavailable' },
+            isAuthenticated: false,
+            user: null
+        })
     };
 }
 
-// Enhanced message handling with authentication
+// ============ MESSAGE HANDLER ============
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
 {
-    console.log('📨 Background received message:', message);
+    console.log('📨 Message received:', message.action);
 
     (async () =>
     {
         try
         {
+            let result;
+
             switch (message.action)
             {
-                // Authentication-specific actions
-                case 'checkAuthStatus':
-                    sendResponse({
-                        isAuthenticated: contentBlocker.isAuthenticated,
-                        authCheckCompleted: contentBlocker.authCheckCompleted,
-                        user: contentBlocker.supabase?.getCurrentUser()
-                    });
+                // Domain management
+                case 'addCustomDomain':
+                    result = await contentBlocker.addCustomDomain(message.domain);
                     break;
 
-                case 'enableOfflineMode':
-                    await contentBlocker.enableOfflineMode(message.duration);
-                    sendResponse({ success: true });
+                case 'removeCustomDomain':
+                    result = await contentBlocker.removeCustomDomain(message.domain);
                     break;
 
-                case 'authSuccess':
-                    await contentBlocker.onAuthenticationSuccess(message.user);
-                    sendResponse({ success: true });
+                case 'addDomainFromTab':
+                    result = await contentBlocker.addDomainFromTab();
                     break;
 
-                // Enhanced existing actions
-                case 'signIn':
-                    const signInResult = await contentBlocker.signInUser(message.email, message.password);
-                    sendResponse(signInResult);
+                // Keyword management
+                case 'addKeyword':
+                    result = await contentBlocker.addKeyword(message.keyword);
                     break;
 
+                case 'removeKeyword':
+                    result = await contentBlocker.removeKeyword(message.keyword);
+                    break;
+
+                // Extension control
+                case 'setActive':
+                    result = await contentBlocker.setActive(message.active);
+                    break;
+
+                // Tab info
+                case 'getCurrentTab':
+                    result = await contentBlocker.getCurrentTab();
+                    break;
+
+                // Authentication
                 case 'signUp':
-                    const signUpResult = await contentBlocker.signUpUser(message.email, message.password);
-                    sendResponse(signUpResult);
+                    result = await contentBlocker.signUp(message.email, message.password);
+                    break;
+
+                case 'signIn':
+                    result = await contentBlocker.signIn(message.email, message.password);
                     break;
 
                 case 'signOut':
-                    const signOutResult = await contentBlocker.signOutUser();
-                    sendResponse(signOutResult);
+                    result = await contentBlocker.signOut();
                     break;
 
-                // All existing actions remain the same
-                case 'getCurrentTab':
-                    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-                    sendResponse({ url: tab.url });
+                case 'enableOfflineMode':
+                    result = await contentBlocker.enableOfflineMode(message.duration);
                     break;
 
-                // ... (all other existing message handlers)
+                // Status
+                case 'getSupabaseStatus':
+                    result = await contentBlocker.getSupabaseStatus();
+                    break;
+
+                case 'checkAuthStatus':
+                    result = {
+                        isAuthenticated: contentBlocker.isAuthenticated,
+                        authCheckCompleted: contentBlocker.authCheckCompleted,
+                        user: contentBlocker.supabase?.getCurrentUser()
+                    };
+                    break;
+
+                // Cloud operations (simplified)
+                case 'syncToCloud':
+                case 'syncFromCloud':
+                case 'createBackup':
+                case 'getCloudBackups':
+                case 'restoreBackup':
+                case 'deleteBackup':
+                    result = { success: false, error: 'Cloud features coming soon' };
+                    break;
 
                 default:
-                    console.log('❓ Unknown action:', message.action);
-                    sendResponse({ error: 'Unknown action' });
+                    result = { success: false, error: 'Unknown action: ' + message.action };
             }
+
+            console.log('📤 Sending response:', result);
+            sendResponse(result);
+
         } catch (error)
         {
-            console.error('💥 Message handling error:', error);
-            sendResponse({ error: error.message });
+            console.error('💥 Message handler error:', error);
+            sendResponse({ success: false, error: error.message });
         }
     })();
 
-    return true; // Indicates we will send response asynchronously
+    return true; // Will respond asynchronously
 });
+
+console.log('✅ Background script loaded successfully');
