@@ -1,17 +1,19 @@
 {
     "manifest_version": 3,
-    "name": "Focus Guard - Content Blocker",
+    "name": "Fokus - Content Blocker",
     "version": "1.0.0",
-    "description": "Cross-browser extension to block adult content and maintain focus on productive activities",
+    "description": "Cross-browser extension to block adult content and maintain focus on productive activities with cloud sync",
     "permissions": [
         "storage",
         "activeTab",
         "tabs",
         "scripting",
-        "webNavigation"
+        "webNavigation",
+        "background"
     ],
     "host_permissions": [
-        "*://*/*"
+        "*://*/*",
+        "https://*.supabase.co/*"
     ],
     "background": {
         "service_worker": "background.js",
@@ -67,7 +69,7 @@
     ],
     "action": {
         "default_popup": "popup.html",
-        "default_title": "Focus Guard Settings"
+        "default_title": "Fokus Settings"
     },
     "options_page": "options.html",
     "options_ui": {
@@ -80,13 +82,19 @@
                 "blocked.html",
                 "blocked.js",
                 "options.html",
-                "debug-test.html"
+                "auth-required.html",
+                "debug-test.html",
+                "supabase-client.js",
+                "config.json"
             ],
             "matches": [
                 "*://*/*"
             ]
         }
     ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self' https://cdnjs.cloudflare.com; object-src 'self'"
+    },
     "icons": {
         "16": "icons/icon16.png",
         "48": "icons/icon48.png",

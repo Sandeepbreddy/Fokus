@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fokus - Authentication Required</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.6s ease-out;
+            color: #333;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            background: #4CAF50;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            margin-bottom: 15px;
+            color: #2c3e50;
+            font-weight: 300;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .auth-container {
+            text-align: left;
+        }
+
+        .auth-tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f8f9fa;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 12px;
+            background: #f8f9fa;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            color: #666;
+        }
+
+        .auth-tab.active {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .auth-form {
+            display: none;
+        }
+
+        .auth-form.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin: 10px 0;
+        }
+
+        .btn:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: #4CAF50;
+            border: 2px solid #4CAF50;
+        }
+
+        .btn-secondary:hover {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .message {
+            padding: 12px;
+            border-radius: 8px;
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .features {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .features h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .features ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .features li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+            color: #555;
+        }
+
+        .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .reason-message {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ffeaa7;
+            margin-bottom: 20px;
+        }
+
+        .default-pin-info {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #bbdefb;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .offline-mode {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff3cd;
+            border-radius: 8px;
+            border: 1px solid #ffeaa7;
+        }
+
+        .offline-timer {
+            font-weight: bold;
+            color: #856404;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 30px 20px;
+                margin: 20px;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="logo">🛡️</div>
+        <h1>Welcome to Fokus</h1>
+        <div class="subtitle">Your Focus & Productivity Guardian</div>
+
+        <!-- Reason-specific message -->
+        <div id="reason-message" class="reason-message" style="display: none;"></div>
+
+        <!-- Default PIN Information -->
+        <div class="default-pin-info">
+            <strong>🔑 Your Default PIN: 1234</strong>
+            <br>
+            <small>You can change this in settings after signing in. Your PIN is stored locally and never synced to the
+                cloud for security.</small>
+        </div>
+
+        <!-- Authentication Tabs -->
+        <div class="auth-container">
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="signin-tab">Sign In</button>
+                <button class="auth-tab" id="signup-tab">Create Account</button>
+            </div>
+
+            <!-- Sign In Form -->
+            <div class="auth-form active" id="signin-form">
+                <div class="form-group">
+                    <label for="signin-email">Email Address</label>
+                    <input type="email" id="signin-email" placeholder="your@email.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="signin-password">Password</label>
+                    <input type="password" id="signin-password" placeholder="Your password" required>
+                </div>
+
+                <button class="btn" id="signin-btn">Sign In</button>
+
+                <div id="signin-message"></div>
+            </div>
+
+            <!-- Sign Up Form -->
+            <div class="auth-form" id="signup-form">
+                <div class="form-group">
+                    <label for="signup-email">Email Address</label>
+                    <input type="email" id="signup-email" placeholder="your@email.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="signup-password">Password</label>
+                    <input type="password" id="signup-password" placeholder="At least 6 characters" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="signup-confirm">Confirm Password</label>
+                    <input type="password" id="signup-confirm" placeholder="Confirm your password" required>
+                </div>
+
+                <button class="btn" id="signup-btn">Create Account</button>
+
+                <div id="signup-message"></div>
+            </div>
+        </div>
+
+        <!-- Features Overview -->
+        <div class="features">
+            <h3>🚀 What You Get With Fokus</h3>
+            <ul>
+                <li>Block distracting websites and keywords automatically</li>
+                <li>Sync your settings across all your devices</li>
+                <li>Create and restore cloud backups</li>
+                <li>Track your productivity and focus streaks</li>
+                <li>PIN protection for settings (stored locally)</li>
+                <li>Works on all major search engines</li>
+            </ul>
+        </div>
+
+        <!-- Offline Mode Option -->
+        <div class="offline-mode">
+            <h4>⚡ Need Quick Access?</h4>
+            <p>You can temporarily use Fokus without an account, but you won't have cloud sync or backup features.</p>
+            <button class="btn btn-secondary" id="offline-mode-btn">Use Offline Mode (1 Hour)</button>
+            <div id="offline-timer" class="offline-timer" style="display: none;"></div>
+        </div>
+
+        <!-- Supabase Setup Required -->
+        <div id="setup-required"
+            style="display: none; margin-top: 20px; padding: 15px; background: #f8d7da; border-radius: 8px; border: 1px solid #f5c6cb;">
+            <h4 style="color: #721c24;">⚙️ Setup Required</h4>
+            <p style="color: #721c24; margin: 10px 0;">
+                Cloud features are not configured yet. Please set up your Supabase database connection in the extension
+                settings.
+            </p>
+            <button class="btn btn-secondary" id="setup-config-btn">Open Configuration</button>
+        </div>
+    </div>
+
+    <script>
+        class AuthenticationManager
+        {
+            constructor()
+            {
+                this.currentReason = this.getUrlParameter('reason') || 'general';
+                this.offlineTimer = null;
+                this.init();
+            }
+
+            init()
+            {
+                this.showReasonMessage();
+                this.setupEventListeners();
+                this.checkSupabaseConfig();
+            }
+
+            getUrlParameter(name)
+            {
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get(name);
+            }
+
+            showReasonMessage()
+            {
+                const reasonEl = document.getElementById('reason-message');
+                const messages = {
+                    'install': '🎉 Welcome! Please create an account or sign in to start using Fokus.',
+                    'startup': '🔐 Please sign in to continue using Fokus with cloud sync.',
+                    'blocking': '⚠️ Authentication required to access this content. Please sign in to continue.',
+                    'update': '🔄 Extension updated! Please sign in again to restore your cloud settings.',
+                    'signout': '👋 You\'ve been signed out. Sign in again to continue using cloud features.',
+                    'general': '🔐 Please sign in to access Fokus features.'
+                };
+
+                const message = messages[this.currentReason] || messages['general'];
+                reasonEl.textContent = message;
+                reasonEl.style.display = 'block';
+            }
+
+            setupEventListeners()
+            {
+                // Tab switching
+                document.getElementById('signin-tab').addEventListener('click', () => this.switchTab('signin'));
+                document.getElementById('signup-tab').addEventListener('click', () => this.switchTab('signup'));
+
+                // Form submissions
+                document.getElementById('signin-btn').addEventListener('click', () => this.signIn());
+                document.getElementById('signup-btn').addEventListener('click', () => this.signUp());
+
+                // Enter key handlers
+                document.getElementById('signin-password').addEventListener('keypress', (e) =>
+                {
+                    if (e.key === 'Enter') this.signIn();
+                });
+                document.getElementById('signup-confirm').addEventListener('keypress', (e) =>
+                {
+                    if (e.key === 'Enter') this.signUp();
+                });
+
+                // Offline mode
+                document.getElementById('offline-mode-btn').addEventListener('click', () => this.enableOfflineMode());
+
+                // Setup configuration
+                document.getElementById('setup-config-btn').addEventListener('click', () => this.openConfiguration());
+            }
+
+            switchTab(tab)
+            {
+                // Update tab buttons
+                document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+                document.getElementById(`${tab}-tab`).classList.add('active');
+
+                // Update forms
+                document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+                document.getElementById(`${tab}-form`).classList.add('active');
+
+                // Clear messages
+                this.clearMessages();
+            }
+
+            async checkSupabaseConfig()
+            {
+                try
+                {
+                    const response = await this.sendMessage({ action: 'getSupabaseStatus' });
+
+                    if (!response.status.connected && response.status.reason === 'Not configured')
+                    {
+                        document.getElementById('setup-required').style.display = 'block';
+                        document.querySelector('.auth-container').style.display = 'none';
+                        document.querySelector('.offline-mode').style.display = 'none';
+                    }
+                } catch (error)
+                {
+                    console.log('Could not check Supabase config:', error);
+                }
+            }
+
+            async signIn()
+            {
+                const email = document.getElementById('signin-email').value.trim();
+                const password = document.getElementById('signin-password').value;
+                const messageEl = document.getElementById('signin-message');
+                const btn = document.getElementById('signin-btn');
+
+                if (!email || !password)
+                {
+                    this.showMessage(messageEl, 'Please enter email and password.', 'error');
+                    return;
+                }
+
+                btn.textContent = 'Signing in...';
+                btn.disabled = true;
+
+                try
+                {
+                    const response = await this.sendMessage({
+                        action: 'signIn',
+                        email,
+                        password
+                    });
+
+                    if (response.success)
+                    {
+                        this.showMessage(messageEl, 'Successfully signed in! 🎉', 'success');
+
+                        // Notify background script
+                        await this.sendMessage({
+                            action: 'authSuccess',
+                            user: response.user
+                        });
+
+                        // Close this tab after short delay
+                        setTimeout(() =>
+                        {
+                            window.close();
+                        }, 2000);
+                    } else
+                    {
+                        this.showMessage(messageEl, response.error || 'Sign in failed', 'error');
+                    }
+                } catch (error)
+                {
+                    this.showMessage(messageEl, `Sign in failed: ${error.message}`, 'error');
+                } finally
+                {
+                    btn.textContent = 'Sign In';
+                    btn.disabled = false;
+                }
+            }
+
+            async signUp()
+            {
+                const email = document.getElementById('signup-email').value.trim();
+                const password = document.getElementById('signup-password').value;
+                const confirm = document.getElementById('signup-confirm').value;
+                const messageEl = document.getElementById('signup-message');
+                const btn = document.getElementById('signup-btn');
+
+                if (!email || !password || !confirm)
+                {
+                    this.showMessage(messageEl, 'Please fill in all fields.', 'error');
+                    return;
+                }
+
+                if (password !== confirm)
+                {
+                    this.showMessage(messageEl, 'Passwords do not match.', 'error');
+                    return;
+                }
+
+                if (password.length < 6)
+                {
+                    this.showMessage(messageEl, 'Password must be at least 6 characters.', 'error');
+                    return;
+                }
+
+                btn.textContent = 'Creating account...';
+                btn.disabled = true;
+
+                try
+                {
+                    const response = await this.sendMessage({
+                        action: 'signUp',
+                        email,
+                        password
+                    });
+
+                    if (response.success)
+                    {
+                        if (response.needsConfirmation)
+                        {
+                            this.showMessage(messageEl,
+                                '✅ Account created! Please check your email for confirmation, then sign in.',
+                                'success'
+                            );
+                            // Switch to sign-in tab
+                            setTimeout(() => this.switchTab('signin'), 3000);
+                        } else
+                        {
+                            this.showMessage(messageEl, 'Account created and signed in! 🎉', 'success');
+
+                            // Notify background script
+                            await this.sendMessage({
+                                action: 'authSuccess',
+                                user: response.user
+                            });
+
+                            // Close this tab after short delay
+                            setTimeout(() =>
+                            {
+                                window.close();
+                            }, 2000);
+                        }
+                    } else
+                    {
+                        this.showMessage(messageEl, response.error || 'Account creation failed', 'error');
+                    }
+                } catch (error)
+                {
+                    this.showMessage(messageEl, `Sign up failed: ${error.message}`, 'error');
+                } finally
+                {
+                    btn.textContent = 'Create Account';
+                    btn.disabled = false;
+                }
+            }
+
+            async enableOfflineMode()
+            {
+                const btn = document.getElementById('offline-mode-btn');
+                const timerEl = document.getElementById('offline-timer');
+
+                btn.textContent = 'Enabling offline mode...';
+                btn.disabled = true;
+
+                try
+                {
+                    const duration = 3600000; // 1 hour
+                    await this.sendMessage({
+                        action: 'enableOfflineMode',
+                        duration
+                    });
+
+                    // Show countdown timer
+                    timerEl.style.display = 'block';
+                    btn.style.display = 'none';
+
+                    this.startOfflineTimer(duration);
+
+                    // Close tab after short delay
+                    setTimeout(() =>
+                    {
+                        window.close();
+                    }, 3000);
+
+                } catch (error)
+                {
+                    console.error('Failed to enable offline mode:', error);
+                    btn.textContent = 'Use Offline Mode (1 Hour)';
+                    btn.disabled = false;
+                }
+            }
+
+            startOfflineTimer(duration)
+            {
+                const timerEl = document.getElementById('offline-timer');
+                const endTime = Date.now() + duration;
+
+                const updateTimer = () =>
+                {
+                    const remaining = endTime - Date.now();
+
+                    if (remaining <= 0)
+                    {
+                        timerEl.textContent = '⏰ Offline mode expired. Please sign in.';
+                        clearInterval(this.offlineTimer);
+                        return;
+                    }
+
+                    const minutes = Math.floor(remaining / 60000);
+                    timerEl.textContent = `⏰ Offline mode active: ${minutes} minutes remaining`;
+                };
+
+                updateTimer();
+                this.offlineTimer = setInterval(updateTimer, 60000); // Update every minute
+            }
+
+            openConfiguration()
+            {
+                // Open extension options page
+                const optionsUrl = chrome.runtime.getURL('options.html#supabase-config');
+                chrome.tabs.create({ url: optionsUrl });
+            }
+
+            showMessage(element, message, type)
+            {
+                const messageClass = type === 'success' ? 'success' :
+                    type === 'info' ? 'info' : 'error';
+
+                element.innerHTML = `<div class="message ${messageClass}">${message}</div>`;
+
+                // Auto-clear error messages after 10 seconds
+                if (type === 'error')
+                {
+                    setTimeout(() =>
+                    {
+                        if (element.innerHTML.includes(message))
+                        {
+                            element.innerHTML = '';
+                        }
+                    }, 10000);
+                }
+            }
+
+            clearMessages()
+            {
+                document.getElementById('signin-message').innerHTML = '';
+                document.getElementById('signup-message').innerHTML = '';
+            }
+
+            sendMessage(message)
+            {
+                return new Promise((resolve, reject) =>
+                {
+                    try
+                    {
+                        chrome.runtime.sendMessage(message, (response) =>
+                        {
+                            if (chrome.runtime.lastError)
+                            {
+                                reject(new Error(chrome.runtime.lastError.message));
+                            } else
+                            {
+                                resolve(response || { success: true });
+                            }
+                        });
+                    } catch (error)
+                    {
+                        reject(error);
+                    }
+                });
+            }
+        }
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', () =>
+        {
+            console.log('🔐 Authentication page loaded');
+
+            try
+            {
+                new AuthenticationManager();
+                console.log('✅ Authentication manager initialized');
+            } catch (error)
+            {
+                console.error('❌ Failed to initialize authentication manager:', error);
+
+                // Show fallback message
+                document.body.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: #721c24; background: #f8d7da; border-radius: 8px; margin: 20px;">
+                        <h3>⚠️ Authentication Error</h3>
+                        <p>Failed to initialize authentication. Please try:</p>
+                        <ul style="text-align: left; margin: 15px 0;">
+                            <li>Refreshing this page</li>
+                            <li>Reloading the extension</li>
+                            <li>Checking browser console for errors</li>
+                        </ul>
+                        <button onclick="location.reload()" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            Refresh Page
+                        </button>
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+
+</html>
