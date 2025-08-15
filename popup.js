@@ -110,35 +110,12 @@ class PopupManager
         // Settings help
         document.getElementById('settings-help').addEventListener('click', () =>
         {
-            alert('📋 How to Access Settings:\n\n' +
+            alert('How to Access Settings:\n\n' +
                 '1. Enter your PIN when prompted (default: 1234)\n' +
                 '2. Or right-click the extension icon in toolbar\n' +
                 '3. Select "Options" from the menu\n' +
                 '4. Or go to browser Extensions page and click "Details" → "Extension options"\n\n' +
-                '💡 Tip: PIN protects your settings from unauthorized changes.');
-        });
-
-        // Test settings (no PIN required)
-        document.getElementById('test-settings').addEventListener('click', () =>
-        {
-            console.log('Testing settings without PIN...');
-            this.testSettingsOpening();
-        });
-
-        // Direct settings link
-        document.getElementById('direct-settings').addEventListener('click', () =>
-        {
-            const extensionId = chrome.runtime.id;
-            const settingsUrl = `chrome-extension://${extensionId}/options.html`;
-
-            // Try to copy to clipboard
-            navigator.clipboard.writeText(settingsUrl).then(() =>
-            {
-                alert(`🔗 Settings URL copied to clipboard!\n\nPaste this in your address bar:\n${settingsUrl}\n\nOr right-click the extension icon → Options`);
-            }).catch(() =>
-            {
-                alert(`🔗 Manual Settings URL:\n\n${settingsUrl}\n\nCopy this URL and paste it in your address bar.\n\nOr right-click the extension icon → Options`);
-            });
+                'Tip: PIN protects your settings from unauthorized changes.');
         });
 
         // PIN modal events
@@ -191,13 +168,13 @@ class PopupManager
         const button = document.getElementById('update-blocklist');
         const originalText = button.textContent;
 
-        button.textContent = '🔄 Updating...';
+        button.textContent = 'UPDATING...';
         button.disabled = true;
 
         try
         {
             await this.sendMessage({ action: 'forceUpdateBlocklist' });
-            button.textContent = '✅ Updated!';
+            button.textContent = 'UPDATED!';
             setTimeout(() =>
             {
                 button.textContent = originalText;
@@ -207,7 +184,7 @@ class PopupManager
             await this.loadStats();
         } catch (error)
         {
-            button.textContent = '❌ Failed';
+            button.textContent = 'FAILED';
             setTimeout(() =>
             {
                 button.textContent = originalText;
@@ -271,7 +248,7 @@ class PopupManager
                         {
                             console.error('Failed to open settings:', chrome.runtime.lastError.message);
                             // Show fallback instructions
-                            alert(`PIN Verified! ✅\n\nSettings couldn't open automatically.\n\nPlease right-click the Focus Guard icon and select "Options"\n\nOr paste this URL in your address bar:\n${optionsUrl}`);
+                            alert(`PIN Verified!\n\nSettings couldn't open automatically.\n\nPlease right-click the Focus Guard icon and select "Options"\n\nOr paste this URL in your address bar:\n${optionsUrl}`);
                         } else
                         {
                             console.log('Settings opened successfully in tab:', tab.id);
@@ -359,31 +336,6 @@ class PopupManager
         }
     }
 
-    testSettingsOpening()
-    {
-        console.log('🧪 Testing settings opening...');
-
-        const optionsUrl = chrome.runtime.getURL('options.html');
-        console.log('🧪 Options URL:', optionsUrl);
-
-        chrome.tabs.create({
-            url: optionsUrl,
-            active: true
-        }, (tab) =>
-        {
-            if (chrome.runtime.lastError)
-            {
-                console.error('🧪 Test failed:', chrome.runtime.lastError.message);
-                alert(`🧪 Test Failed!\n\nError: ${chrome.runtime.lastError.message}\n\nBrowser is blocking the opening. Use manual method:\nRight-click Focus Guard icon → Options`);
-            } else
-            {
-                console.log('🧪 Test succeeded! Tab created:', tab.id);
-                alert('🧪 Test Successful!\n\nSettings opened in new tab. The extension is working correctly.');
-                setTimeout(() => window.close(), 1000);
-            }
-        });
-    }
-
     sendMessage(message)
     {
         console.log('Sending message:', message);
@@ -423,7 +375,7 @@ document.addEventListener('DOMContentLoaded', () =>
         // Check if all required elements exist
         const requiredElements = [
             'toggle', 'open-settings', 'block-current-site',
-            'update-blocklist', 'pause-blocking', 'settings-help', 'direct-settings', 'test-settings',
+            'update-blocklist', 'pause-blocking', 'settings-help',
             'pin-modal', 'pin-input', 'pin-confirm', 'pin-cancel'
         ];
 
@@ -445,16 +397,16 @@ document.addEventListener('DOMContentLoaded', () =>
 
         // Show error message to user
         document.body.innerHTML = `
-      <div style="padding: 20px; color: #721c24; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; margin: 10px; font-family: Arial, sans-serif;">
-        <strong>⚠️ Popup Error:</strong><br>
-        Failed to initialize extension popup. Please try:
-        <ul style="margin: 10px 0;">
-          <li>Refreshing the page</li>
-          <li>Reloading the extension</li>
-          <li>Checking browser console for errors</li>
-        </ul>
-        <small>Error: ${error.message}</small>
-      </div>
-    `;
+            <div style="padding: 20px; color: #721c24; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; margin: 10px; font-family: Arial, sans-serif;">
+                <strong>Popup Error:</strong><br>
+                Failed to initialize extension popup. Please try:
+                <ul style="margin: 10px 0;">
+                    <li>Refreshing the page</li>
+                    <li>Reloading the extension</li>
+                    <li>Checking browser console for errors</li>
+                </ul>
+                <small>Error: ${error.message}</small>
+            </div>
+        `;
     }
 });

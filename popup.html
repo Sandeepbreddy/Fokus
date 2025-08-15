@@ -206,14 +206,10 @@
             color: white;
         }
 
-        .btn-info {
-            background: #17a2b8;
+        .error {
+            color: #ff6b6b;
             font-size: 12px;
-            padding: 8px 12px;
-        }
-
-        .btn-info:hover {
-            background: #138496;
+            margin-top: 10px;
         }
 
         .help-text {
@@ -258,28 +254,20 @@
         <strong>Current Site:</strong>
         <div class="site-url" id="current-url">Loading...</div>
         <button class="btn btn-danger" id="block-current-site" style="margin-top: 10px;">
-            Block This Domain
+            BLOCK SITE
         </button>
     </div>
 
     <div class="actions">
-        <button class="btn" id="open-settings">⚙️ Settings & Management</button>
-        <button class="btn" id="update-blocklist">🔄 Update Blocklist</button>
-        <button class="btn" id="pause-blocking">⏸️ Pause Blocking (1 hour)</button>
-        <button class="btn btn-info" id="settings-help">❓ Settings Help</button>
-        <button class="btn btn-info" id="direct-settings">🔗 Direct Settings Link</button>
-        <button class="btn btn-info" id="test-settings">🧪 Test Settings Opening</button>
+        <button class="btn" id="open-settings">SETTINGS</button>
+        <button class="btn" id="update-blocklist">UPDATE</button>
+        <button class="btn" id="pause-blocking">PAUSE (1 HOUR)</button>
+        <button class="btn" id="settings-help">HELP</button>
     </div>
 
     <div class="help-text">
         If settings won't open, right-click extension icon → Options
     </div>
-
-    .error {
-    color: #ff6b6b;
-    font-size: 12px;
-    margin-top: 10px;
-    }
 
     <!-- PIN Modal -->
     <div class="pin-modal" id="pin-modal">
@@ -288,8 +276,8 @@
             <p id="pin-message">Enter your PIN to access settings</p>
             <input type="password" class="pin-input" id="pin-input" maxlength="6" placeholder="••••">
             <div class="pin-buttons">
-                <button class="pin-btn pin-btn-cancel" id="pin-cancel">Cancel</button>
-                <button class="pin-btn pin-btn-confirm" id="pin-confirm">Confirm</button>
+                <button class="pin-btn pin-btn-cancel" id="pin-cancel">CANCEL</button>
+                <button class="pin-btn pin-btn-confirm" id="pin-confirm">CONFIRM</button>
             </div>
             <div class="error" id="pin-error"></div>
         </div>

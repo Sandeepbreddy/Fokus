@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "Fokus - Content Blocker",
     "version": "1.0.0",
-    "description": "Cross-browser extension to block adult content and maintain focus on productive activities with cloud sync",
+    "description": "Cross-browser extension to block adult content and maintain focus on productive activities with local backup",
     "permissions": [
         "storage",
         "activeTab",
@@ -12,8 +12,7 @@
         "background"
     ],
     "host_permissions": [
-        "*://*/*",
-        "https://*.supabase.co/*"
+        "*://*/*"
     ],
     "background": {
         "service_worker": "background.js"
@@ -82,12 +81,9 @@
                 "blocked.js",
                 "options.html",
                 "options.js",
-                "auth-required.html",
-                "auth-required.js",
+                "options-core.js",
                 "debug-test.html",
-                "debug-test.js",
-                "supabase-client.js",
-                "config.json"
+                "debug-test.js"
             ],
             "matches": [
                 "*://*/*"
@@ -95,7 +91,7 @@
         }
     ],
     "content_security_policy": {
-        "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co; object-src 'self'"
+        "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'self'"
     },
     "icons": {
         "16": "icons/icon16.png",

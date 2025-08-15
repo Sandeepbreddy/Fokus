@@ -12,13 +12,13 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <h1>🛡️ Fokus Settings</h1>
-            <p>Configure your content blocking preferences and maintain focus across all devices</p>
+            <h1>Fokus Settings</h1>
+            <p>Configure your content blocking preferences</p>
         </div>
 
         <!-- Statistics Overview -->
-        <div class="stats-overview">
-            <h3>📊 Protection Statistics</h3>
+        <div class="card stats-overview">
+            <h3>Protection Statistics</h3>
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-number" id="total-blocks">0</div>
@@ -42,403 +42,168 @@
         <div class="settings-grid">
             <!-- Blocked Keywords -->
             <div class="card">
-                <h3>🚫 Blocked Keywords</h3>
+                <div class="card-body">
+                    <h3>Blocked Keywords</h3>
 
-                <div class="form-group">
-                    <label for="new-keyword">Add New Keyword:</label>
-                    <input type="text" id="new-keyword" placeholder="Enter keyword to block">
-                </div>
-                <button class="btn" id="add-keyword">➕ Add Keyword</button>
+                    <div class="form-group">
+                        <label for="new-keyword">Add New Keyword:</label>
+                        <input type="text" id="new-keyword" placeholder="Enter keyword to block">
+                    </div>
+                    <button class="btn btn-primary" id="add-keyword">ADD</button>
 
-                <div class="list-container" id="keywords-list" style="margin-top: 20px;">
-                    <div class="loading">Loading keywords...</div>
-                </div>
+                    <div class="list-container" id="keywords-list">
+                        <div class="loading">Loading keywords...</div>
+                    </div>
 
-                <div style="margin-top: 20px; display: flex; gap: 12px; flex-wrap: wrap;">
-                    <button class="btn btn-secondary" id="reset-keywords">↩️ Reset to Defaults</button>
-                    <button class="btn btn-danger" id="clear-keywords">🗑️ Clear All Keywords</button>
+                    <div class="btn-group">
+                        <button class="btn btn-secondary" id="reset-keywords">RESET</button>
+                        <button class="btn btn-danger" id="clear-keywords">CLEAR ALL</button>
+                    </div>
                 </div>
             </div>
 
             <!-- Custom Domains -->
             <div class="card">
-                <h3>🌐 Custom Blocked Domains</h3>
+                <div class="card-body">
+                    <h3>Custom Blocked Domains</h3>
 
-                <div class="form-group">
-                    <label for="new-domain">Add New Domain:</label>
-                    <input type="text" id="new-domain" placeholder="example.com">
-                </div>
-                <button class="btn" id="add-domain">➕ Add Domain</button>
+                    <div class="form-group">
+                        <label for="new-domain">Add New Domain:</label>
+                        <input type="text" id="new-domain" placeholder="example.com">
+                    </div>
+                    <button class="btn btn-primary" id="add-domain">ADD</button>
 
-                <div class="list-container" id="domains-list" style="margin-top: 20px;">
-                    <div class="loading">Loading domains...</div>
-                </div>
+                    <div class="list-container" id="domains-list">
+                        <div class="loading">Loading domains...</div>
+                    </div>
 
-                <div style="margin-top: 20px;">
-                    <button class="btn btn-danger" id="clear-domains">🗑️ Clear All Domains</button>
+                    <div class="btn-group">
+                        <button class="btn btn-danger" id="clear-domains">CLEAR ALL</button>
+                    </div>
                 </div>
             </div>
 
             <!-- Blocklist Management -->
             <div class="card">
-                <h3>📋 Blocklist Sources</h3>
-                <p style="color: #666; margin-bottom: 25px; line-height: 1.6;">
-                    Manage multiple GitHub blocklist sources. The extension automatically combines all enabled lists.
-                </p>
+                <div class="card-body">
+                    <h3>Blocklist Sources</h3>
+                    <p class="description">Manage multiple GitHub blocklist sources. The extension automatically
+                        combines all enabled lists.</p>
 
-                <!-- Add Button -->
-                <div style="margin-bottom: 25px;">
-                    <button class="btn" id="add-blocklist-btn">➕ Add Blocklist Source</button>
-                </div>
+                    <button class="btn btn-primary" id="add-blocklist-btn">ADD SOURCE</button>
 
-                <div class="list-container" id="blocklists-container" style="max-height: 400px; margin-bottom: 20px;">
-                    <div class="loading">Loading blocklist sources...</div>
-                </div>
-
-                <!-- Blocklist Controls -->
-                <div
-                    style="background: linear-gradient(135deg, #e8f5e8, #c8e6c9); border-radius: 12px; padding: 20px; margin: 20px 0;">
-                    <div
-                        style="display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; margin-bottom: 15px;">
-                        <span style="font-weight: 500;">Last Update:</span>
-                        <span id="last-update">Never</span>
+                    <div class="list-container" id="blocklists-container">
+                        <div class="loading">Loading blocklist sources...</div>
                     </div>
 
-                    <div class="progress-bar" id="update-progress" style="display: none; margin-bottom: 15px;">
-                        <div class="progress-fill" id="progress-fill"></div>
-                    </div>
+                    <!-- Blocklist Controls -->
+                    <div class="controls-section">
+                        <div class="info-row">
+                            <span>Last Update:</span>
+                            <span id="last-update">Never</span>
+                        </div>
 
-                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                        <button class="btn" id="force-update">🔄 Update All Sources</button>
-                        <button class="btn btn-info" id="view-blocked-count">📊 View Statistics</button>
-                        <button class="btn btn-secondary" id="test-blocklist-url">🧪 Test URL</button>
-                    </div>
-                </div>
+                        <div class="progress-bar" id="update-progress" style="display: none;">
+                            <div class="progress-fill" id="progress-fill"></div>
+                        </div>
 
-                <!-- Popular Sources -->
-                <div style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-radius: 12px; padding: 20px;">
-                    <h4 style="color: #1976d2; margin-bottom: 15px;">⭐ Popular Blocklist Sources</h4>
-                    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-                        <button class="btn btn-info" style="font-size: 12px; padding: 10px 14px;"
-                            data-popular-blocklist="stevenblack-porn-only">
-                            StevenBlack Porn Only
-                        </button>
-                        <button class="btn btn-info" style="font-size: 12px; padding: 10px 14px;"
-                            data-popular-blocklist="stevenblack-porn-social">
-                            StevenBlack Porn + Social
-                        </button>
-                        <button class="btn btn-info" style="font-size: 12px; padding: 10px 14px;"
-                            data-popular-blocklist="energized-porn">
-                            Energized Porn Pack
-                        </button>
+                        <div class="btn-group">
+                            <button class="btn btn-success" id="force-update">UPDATE ALL</button>
+                            <button class="btn btn-info" id="view-blocked-count">STATISTICS</button>
+                            <button class="btn btn-secondary" id="test-blocklist-url">TEST URL</button>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Cloud Sync & Backup -->
+            <!-- Local Backup & Restore -->
             <div class="card">
-                <h3>☁️ Cloud Sync & Backup</h3>
+                <div class="card-body">
+                    <h3>Local Backup & Restore</h3>
+                    <p class="description">Export your settings for backup or import settings from another device.</p>
 
-                <!-- Connection Status -->
-                <div class="connection-status">
-                    <h4 style="margin-bottom: 15px;">🌐 Database Connection</h4>
-                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; align-items: center;">
-                        <span>Status:</span> <span id="connection-state" style="font-weight: bold;">Checking...</span>
-                        <span>Project:</span> <span id="project-name">Loading...</span>
-                        <span>Authentication:</span> <span id="auth-state">Not authenticated</span>
-                    </div>
-                </div>
-
-                <!-- Authentication Section -->
-                <div id="auth-section">
-                    <!-- Sign In Form -->
-                    <div id="sign-in-form" class="auth-form">
-                        <h4 style="margin-bottom: 20px;">🔐 Sign In to Your Account</h4>
-                        <div class="form-group">
-                            <label for="auth-email">Email Address:</label>
-                            <input type="email" id="auth-email" placeholder="your@email.com">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="auth-password">Password:</label>
-                            <input type="password" id="auth-password" placeholder="Your password">
-                        </div>
-
-                        <div style="display: flex; gap: 12px; margin-top: 20px;">
-                            <button class="btn" id="sign-in">🔑 Sign In</button>
-                            <button class="btn btn-secondary" id="show-sign-up">👤 Create Account</button>
-                        </div>
-                        <div id="auth-message"></div>
-                    </div>
-
-                    <!-- Sign Up Form -->
-                    <div id="sign-up-form" class="auth-form">
-                        <h4 style="margin-bottom: 20px;">👤 Create New Account</h4>
-                        <div class="form-group">
-                            <label for="signup-email">Email Address:</label>
-                            <input type="email" id="signup-email" placeholder="your@email.com">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="signup-password">Password:</label>
-                            <input type="password" id="signup-password" placeholder="At least 6 characters">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="signup-confirm">Confirm Password:</label>
-                            <input type="password" id="signup-confirm" placeholder="Confirm your password">
-                        </div>
-
-                        <div style="display: flex; gap: 12px; margin-top: 20px;">
-                            <button class="btn" id="sign-up">✨ Create Account</button>
-                            <button class="btn btn-secondary" id="show-sign-in">🔙 Back to Sign In</button>
-                        </div>
-                        <div id="signup-message"></div>
-                    </div>
-
-                    <!-- User Dashboard -->
-                    <div id="user-dashboard" class="auth-form">
-                        <h4 style="margin-bottom: 20px;">👤 Account Dashboard</h4>
-
-                        <div
-                            style="background: linear-gradient(135deg, #e8f5e8, #c8e6c9); padding: 20px; border-radius: 12px; margin-bottom: 25px;">
-                            <div
-                                style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; align-items: center;">
-                                <span>Signed in as:</span>
-                                <span id="current-user-email" style="font-weight: bold; color: #2e7d32;"></span>
-                                <span>Sync Status:</span>
-                                <span id="sync-status" style="font-weight: bold;"></span>
-                                <span>Last Sync:</span>
-                                <span id="last-sync-time">Never</span>
-                            </div>
-                        </div>
-
-                        <!-- Sync Controls -->
-                        <div class="sync-controls">
-                            <button class="btn" id="sync-to-cloud">
-                                <span>📤</span>
-                                <span>Upload to Cloud</span>
-                            </button>
-                            <button class="btn" id="sync-from-cloud">
-                                <span>📥</span>
-                                <span>Download from Cloud</span>
-                            </button>
-                            <button class="btn btn-secondary" id="force-sync">
-                                <span>🔄</span>
-                                <span>Force Full Sync</span>
-                            </button>
-                        </div>
-
-                        <!-- Cloud Backups -->
-                        <div
-                            style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-radius: 15px; padding: 25px; margin: 25px 0;">
-                            <h4 style="color: #1976d2; margin-bottom: 20px;">💾 Cloud Backups</h4>
-
-                            <div class="form-group">
-                                <label for="backup-name">Backup Name:</label>
-                                <input type="text" id="backup-name" placeholder="My Settings Backup">
-                            </div>
-
-                            <button class="btn" id="create-backup"
-                                style="width: 100%; justify-content: center; margin-bottom: 20px;">
-                                <span>💾</span>
-                                <span>Create Backup</span>
-                            </button>
-
-                            <div class="list-container" id="cloud-backups-list" style="max-height: 250px;">
-                                <div class="loading">Loading backups...</div>
-                            </div>
-                        </div>
-
-                        <!-- Account Actions -->
-                        <div
-                            style="display: flex; gap: 12px; flex-wrap: wrap; padding-top: 20px; border-top: 2px solid #e9ecef;">
-                            <button class="btn btn-secondary" id="test-connection">🔧 Test Connection</button>
-                            <button class="btn btn-info" id="export-cloud-data">📤 Export Data</button>
-                            <button class="btn btn-danger" id="sign-out">🚪 Sign Out</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Information Sections -->
-                <div class="info-box" style="margin-top: 25px;">
-                    <h4 style="margin-bottom: 15px;">🚀 Quick Start Guide</h4>
-                    <ol style="margin-left: 20px; line-height: 1.8;">
-                        <li><strong>Create Account:</strong> Click "Create Account" if you're new</li>
-                        <li><strong>Sign In:</strong> Use your email and password to access cloud features</li>
-                        <li><strong>Auto-Sync:</strong> Your settings will automatically sync across devices</li>
-                        <li><strong>Create Backups:</strong> Make named backups before major changes</li>
-                        <li><strong>Cross-Device:</strong> Install on other devices and sign in to sync</li>
-                    </ol>
-                </div>
-
-                <div class="warning-box">
-                    <h4 style="margin-bottom: 15px;">🔒 Privacy & Security</h4>
-                    <ul style="margin-left: 20px; line-height: 1.8;">
-                        <li>Your settings sync across devices via cloud</li>
-                        <li>Your PIN stays local for maximum security</li>
-                        <li>Each device can have a different PIN if desired</li>
-                        <li>Only you can access your data with your account</li>
-                        <li>All data is encrypted in transit and at rest</li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- Extension Status -->
-            <div class="card">
-                <h3>⚡ Extension Status</h3>
-
-                <div
-                    style="background: linear-gradient(135deg, #e8f5e8, #c8e6c9); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; align-items: center;">
-                        <span>Protection Status:</span>
-                        <span id="protection-status" style="font-weight: bold; color: #2e7d32;">Active</span>
-                        <span>Version:</span>
-                        <span>Fokus v1.0.0</span>
-                        <span>Browser:</span>
-                        <span id="browser-info">Detecting...</span>
-                    </div>
-                </div>
-
-                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                    <button class="btn btn-info" id="test-blocking">🧪 Test Blocking</button>
-                    <button class="btn btn-secondary" id="view-logs">📋 View Activity Log</button>
-                </div>
-            </div>
-
-            <!-- Advanced Settings -->
-            <div class="card">
-                <h3>⚙️ Advanced Settings</h3>
-
-                <!-- PIN Information and Change -->
-                <div
-                    style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-radius: 15px; padding: 25px; margin-bottom: 25px;">
-                    <h4 style="color: #1976d2; margin-bottom: 15px;">🔑 PIN Protection</h4>
-
-                    <div class="pin-info-box" style="margin-bottom: 20px;">
-                        <p style="color: #1976d2; font-size: 16px; margin-bottom: 10px;">
-                            <strong>Default PIN is 1234</strong>
-                        </p>
-                        <p style="color: #666; font-size: 14px;">
-                            If you want, you can change it below. For any reason extension is uninstalled, PIN defaults
-                            to 1234.
-                        </p>
-                    </div>
-
-                    <!-- Change PIN Form -->
-                    <div style="background: white; border-radius: 12px; padding: 20px;">
-                        <h5 style="color: #2c3e50; margin-bottom: 15px;">Change Your PIN</h5>
-
-                        <div class="form-group">
-                            <label for="current-pin">Current PIN:</label>
-                            <input type="password" id="current-pin" placeholder="Enter current PIN" maxlength="6">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="new-pin">New PIN:</label>
-                            <input type="password" id="new-pin" placeholder="Enter new PIN (4-6 digits)" maxlength="6">
-                            <small style="color: #666;">Recommended: Use 4-6 digits that you can remember easily</small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="confirm-pin">Confirm New PIN:</label>
-                            <input type="password" id="confirm-pin" placeholder="Confirm new PIN" maxlength="6">
-                        </div>
-
-                        <div style="display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
-                            <button class="btn" id="change-pin">🔄 Change PIN</button>
-                            <button class="btn btn-secondary" id="reset-to-default">↩️ Reset to Default (1234)</button>
-                        </div>
-
-                        <div id="pin-message"></div>
-                    </div>
-                </div>
-
-                <!-- Local Backup & Restore -->
-                <div
-                    style="background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-radius: 15px; padding: 25px; margin-bottom: 25px;">
-                    <h4 style="color: #2c3e50; margin-bottom: 20px;">💾 Local Backup & Restore</h4>
-                    <p style="color: #666; margin-bottom: 20px; line-height: 1.6;">
-                        Export your settings for backup or import settings from another device.
-                    </p>
-
-                    <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 25px;">
-                        <button class="btn" id="export-settings">📤 Export Settings</button>
-                        <button class="btn btn-secondary" id="import-btn">📥 Import Settings</button>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" id="export-settings">EXPORT</button>
+                        <button class="btn btn-secondary" id="import-btn">IMPORT</button>
                         <input type="file" id="import-file" style="display: none;" accept=".json">
                     </div>
 
                     <div id="backup-message"></div>
 
                     <div class="warning-box">
-                        <h4 style="margin-bottom: 15px;">⚠️ Danger Zone</h4>
-                        <p style="margin-bottom: 15px;">This will restore all settings to default values and cannot be
-                            undone.</p>
-                        <button class="btn btn-danger" id="reset-all">🔄 Reset All Settings</button>
+                        <h5>Danger Zone</h5>
+                        <p>This will restore all settings to default values and cannot be undone.</p>
+                        <button class="btn btn-danger" id="reset-all">RESET ALL</button>
                     </div>
                 </div>
+            </div>
 
-                <!-- Other Advanced Options -->
-                <div class="feature-grid">
-                    <div class="feature-card">
-                        <h4 style="color: #2c3e50; margin-bottom: 15px;">🔄 Auto-Sync</h4>
-                        <div style="margin-bottom: 15px;">
-                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                                <input type="checkbox" id="auto-sync-enabled" checked>
-                                <span>Enable automatic cloud sync</span>
-                            </label>
+            <!-- Extension Status -->
+            <div class="card">
+                <div class="card-body">
+                    <h3>Extension Status</h3>
+
+                    <div class="status-section">
+                        <div class="status-row">
+                            <span>Protection Status:</span>
+                            <span id="protection-status" class="status-active">Active</span>
                         </div>
-
-                        <div class="form-group">
-                            <label for="sync-frequency">Sync Frequency:</label>
-                            <select id="sync-frequency">
-                                <option value="1">Every 1 minute</option>
-                                <option value="5" selected>Every 5 minutes</option>
-                                <option value="15">Every 15 minutes</option>
-                                <option value="30">Every 30 minutes</option>
-                                <option value="60">Every hour</option>
-                            </select>
+                        <div class="status-row">
+                            <span>Version:</span>
+                            <span>Fokus v1.0.0</span>
+                        </div>
+                        <div class="status-row">
+                            <span>Browser:</span>
+                            <span id="browser-info">Detecting...</span>
                         </div>
                     </div>
 
-                    <div class="feature-card">
-                        <h4 style="color: #2c3e50; margin-bottom: 15px;">🗂️ Backup Management</h4>
-
-                        <div class="form-group">
-                            <label for="backup-retention">Backup Retention:</label>
-                            <select id="backup-retention">
-                                <option value="5">Keep 5 backups</option>
-                                <option value="10" selected>Keep 10 backups</option>
-                                <option value="20">Keep 20 backups</option>
-                                <option value="50">Keep 50 backups</option>
-                            </select>
-                        </div>
-
-                        <button class="btn btn-secondary" id="cleanup-backups"
-                            style="width: 100%; justify-content: center;">
-                            🧹 Cleanup Old Backups
-                        </button>
+                    <div class="btn-group">
+                        <button class="btn btn-info" id="test-blocking">TEST</button>
+                        <button class="btn btn-secondary" id="view-logs">VIEW LOGS</button>
                     </div>
                 </div>
+            </div>
 
-                <!-- Statistics Display -->
-                <div id="sync-statistics" style="margin-top: 25px; display: none;">
-                    <h4 style="margin-bottom: 20px;">📈 Sync Statistics</h4>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
-                        <div
-                            style="text-align: center; padding: 20px; background: linear-gradient(135deg, #4CAF50, #45a049); color: white; border-radius: 12px;">
-                            <div style="font-size: 2rem; font-weight: bold;" id="total-syncs">0</div>
-                            <div style="font-size: 0.9rem; opacity: 0.9;">Total Syncs</div>
+            <!-- Advanced Settings -->
+            <div class="card">
+                <div class="card-body">
+                    <h3>Advanced Settings</h3>
+
+                    <!-- PIN Protection -->
+                    <div class="section">
+                        <h4>PIN Protection</h4>
+                        <div class="info-box">
+                            <p><strong>Default PIN is 1234</strong></p>
+                            <small>If extension is uninstalled, PIN defaults to 1234.</small>
                         </div>
-                        <div
-                            style="text-align: center; padding: 20px; background: linear-gradient(135deg, #2196F3, #1976d2); color: white; border-radius: 12px;">
-                            <div style="font-size: 2rem; font-weight: bold;" id="total-backups">0</div>
-                            <div style="font-size: 0.9rem; opacity: 0.9;">Cloud Backups</div>
-                        </div>
-                        <div
-                            style="text-align: center; padding: 20px; background: linear-gradient(135deg, #FF9800, #f57c00); color: white; border-radius: 12px;">
-                            <div style="font-size: 2rem; font-weight: bold;" id="data-usage">0KB</div>
-                            <div style="font-size: 0.9rem; opacity: 0.9;">Data Usage</div>
+
+                        <div class="pin-section">
+                            <h5>Change Your PIN</h5>
+
+                            <div class="form-group">
+                                <label for="current-pin">Current PIN:</label>
+                                <input type="password" id="current-pin" placeholder="Enter current PIN" maxlength="6">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="new-pin">New PIN:</label>
+                                <input type="password" id="new-pin" placeholder="Enter new PIN (4-6 digits)"
+                                    maxlength="6">
+                                <small>Recommended: Use 4-6 digits that you can remember easily</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="confirm-pin">Confirm New PIN:</label>
+                                <input type="password" id="confirm-pin" placeholder="Confirm new PIN" maxlength="6">
+                            </div>
+
+                            <div class="btn-group">
+                                <button class="btn btn-primary" id="change-pin">CHANGE</button>
+                                <button class="btn btn-secondary" id="reset-to-default">RESET</button>
+                            </div>
+
+                            <div id="pin-message"></div>
                         </div>
                     </div>
                 </div>
@@ -446,11 +211,9 @@
         </div>
 
         <!-- Footer -->
-        <div
-            style="text-align: center; color: white; margin-top: 50px; opacity: 0.9; animation: fadeInUp 0.8s ease-out;">
-            <p style="font-size: 1.1rem; margin-bottom: 10px;">🛡️ Fokus helps you maintain productivity and focus by
-                blocking distracting content.</p>
-            <p style="font-size: 0.95rem; opacity: 0.8;">
+        <div class="footer">
+            <p>Fokus helps you maintain productivity and focus by blocking distracting content.</p>
+            <p class="small">
                 Remember: No extension can prevent being disabled through browser settings. True focus comes from
                 within.
             </p>
@@ -461,7 +224,7 @@
     <div class="modal-overlay" id="add-blocklist-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title">➕ Add New Blocklist Source</h3>
+                <h5>Add New Blocklist Source</h5>
                 <button class="modal-close" id="close-blocklist-modal">&times;</button>
             </div>
 
@@ -474,7 +237,7 @@
                 <div class="form-group">
                     <label for="modal-blocklist-url">GitHub Raw URL:</label>
                     <input type="url" id="modal-blocklist-url" placeholder="https://raw.githubusercontent.com/...">
-                    <small style="color: #666;">Must be a valid GitHub raw URL</small>
+                    <small>Must be a valid GitHub raw URL</small>
                 </div>
 
                 <div class="form-group">
@@ -483,112 +246,18 @@
                         placeholder="Brief description of this blocklist">
                 </div>
 
-                <div style="margin: 20px 0;">
-                    <button class="btn btn-info" id="test-modal-url">🧪 Test URL</button>
-                </div>
+                <button class="btn btn-info" id="test-modal-url">TEST URL</button>
             </div>
 
             <div class="modal-footer">
-                <button class="btn btn-secondary" id="cancel-blocklist">Cancel</button>
-                <button class="btn" id="submit-blocklist">Add Source</button>
+                <button class="btn btn-secondary" id="cancel-blocklist">CANCEL</button>
+                <button class="btn btn-primary" id="submit-blocklist">ADD SOURCE</button>
             </div>
         </div>
     </div>
 
     <script src="options-core.js"></script>
-    <script src="options-cloud.js"></script>
-    <script>
-        // Initialize when DOM is ready
-        document.addEventListener('DOMContentLoaded', async () =>
-        {
-            console.log('🚀 Options page DOM loaded, initializing...');
-
-            try
-            {
-                // Check if all required elements exist
-                const requiredElements = ['keywords-list', 'domains-list'];
-                const missingElements = requiredElements.filter(id => !document.getElementById(id));
-
-                if (missingElements.length > 0)
-                {
-                    console.error('Missing required elements:', missingElements);
-                    throw new Error(`Missing elements: ${missingElements.join(', ')}`);
-                }
-
-                // Initialize options manager
-                window.optionsManager = new OptionsManager();
-
-                // Setup cloud event listeners
-                window.optionsManager.setupCloudEventListeners();
-                window.optionsManager.setupBlocklistEventListeners();
-
-                await window.optionsManager.init();
-
-                console.log('✅ Options page initialized successfully');
-
-                // Handle URL hash for direct navigation
-                const hash = window.location.hash;
-                if (hash)
-                {
-                    setTimeout(() =>
-                    {
-                        const element = document.querySelector(hash);
-                        if (element)
-                        {
-                            element.scrollIntoView({ behavior: 'smooth' });
-                        }
-                    }, 500);
-                }
-
-            } catch (error)
-            {
-                console.error('❌ Failed to initialize options page:', error);
-
-                // Show error message to user
-                document.body.innerHTML = `
-                    <div style="padding: 40px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: white; font-family: 'Segoe UI', sans-serif;">
-                        <div style="max-width: 600px; margin: 0 auto; background: rgba(255, 255, 255, 0.95); color: #333; padding: 40px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);">
-                            <h1 style="color: #e74c3c; margin-bottom: 20px;">⚠️ Settings Error</h1>
-                            <p style="margin-bottom: 20px; line-height: 1.6;">Failed to initialize Fokus settings page. This might be due to:</p>
-                            <ul style="text-align: left; margin: 20px 0; line-height: 1.8;">
-                                <li>Browser extension permissions</li>
-                                <li>Corrupted extension files</li>
-                                <li>Browser compatibility issues</li>
-                                <li>Missing configuration files</li>
-                            </ul>
-                            <div style="margin: 30px 0;">
-                                <button onclick="location.reload()" style="background: #4CAF50; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; margin: 5px; font-size: 14px;">
-                                    🔄 Refresh Page
-                                </button>
-                            </div>
-                            <details style="text-align: left; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
-                                <summary style="cursor: pointer; font-weight: bold;">Technical Details</summary>
-                                <pre style="margin-top: 10px; font-size: 12px; color: #666; white-space: pre-wrap;">${error.message}\n\nStack: ${error.stack}</pre>
-                            </details>
-                        </div>
-                    </div>
-                `;
-            }
-        });
-
-        // Handle page unload
-        window.addEventListener('beforeunload', () =>
-        {
-            console.log('👋 Options page unloading...');
-        });
-
-        // Handle visibility changes
-        document.addEventListener('visibilitychange', () =>
-        {
-            if (!document.hidden && window.optionsManager && window.optionsManager.isInitialized)
-            {
-                setTimeout(() =>
-                {
-                    window.optionsManager.loadAllSettings();
-                }, 1000);
-            }
-        });
-    </script>
+    <script src="options.js"></script>
 </body>
 
 </html>

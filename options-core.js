@@ -15,27 +15,26 @@ class OptionsManager
 
     async init()
     {
-        console.log('🚀 Initializing Options Manager...');
+        console.log('Initializing Options Manager...');
 
         try
         {
             this.setupEventListeners();
             await this.loadAllSettings();
-            await this.initializeSupabaseFeatures();
             this.updateBrowserInfo();
 
             this.isInitialized = true;
-            console.log('✅ Options Manager initialized successfully');
+            console.log('Options Manager initialized successfully');
         } catch (error)
         {
-            console.error('❌ Failed to initialize Options Manager:', error);
+            console.error('Failed to initialize Options Manager:', error);
             this.showError('Failed to initialize settings. Please refresh the page.');
         }
     }
 
     setupEventListeners()
     {
-        // PIN Management (Advanced Settings)
+        // PIN Management
         this.setupPinEventListeners();
 
         // Keywords Management
@@ -51,7 +50,7 @@ class OptionsManager
         this.setupAdvancedEventListeners();
     }
 
-    // ============ PIN MANAGEMENT ============
+    // PIN MANAGEMENT
     setupPinEventListeners()
     {
         document.getElementById('change-pin')?.addEventListener('click', () => this.changePIN());
@@ -71,7 +70,7 @@ class OptionsManager
             this.currentPin = data.pin || '1234';
         } catch (error)
         {
-            console.error('❌ Failed to load current PIN:', error);
+            console.error('Failed to load current PIN:', error);
             this.currentPin = '1234';
         }
     }
@@ -122,7 +121,7 @@ class OptionsManager
             await chrome.storage.local.set({ pin: newPin });
             this.currentPin = newPin;
 
-            this.showMessage(messageEl, 'PIN changed successfully! 🎉', 'success');
+            this.showMessage(messageEl, 'PIN changed successfully!', 'success');
 
             ['current-pin', 'new-pin', 'confirm-pin'].forEach(id =>
             {
@@ -132,7 +131,7 @@ class OptionsManager
 
         } catch (error)
         {
-            console.error('❌ PIN change error:', error);
+            console.error('PIN change error:', error);
             this.showMessage(messageEl, 'Failed to change PIN. Please try again.', 'error');
         }
     }
@@ -153,7 +152,7 @@ class OptionsManager
             }
         } catch (error)
         {
-            console.error('❌ PIN reset error:', error);
+            console.error('PIN reset error:', error);
             const messageEl = document.getElementById('pin-message');
             if (messageEl)
             {
@@ -162,7 +161,7 @@ class OptionsManager
         }
     }
 
-    // ============ KEYWORDS MANAGEMENT ============
+    // KEYWORDS MANAGEMENT
     setupKeywordsEventListeners()
     {
         document.getElementById('add-keyword')?.addEventListener('click', () => this.addKeyword());
@@ -178,30 +177,30 @@ class OptionsManager
     {
         try
         {
-            console.log('🔄 Loading keywords...');
+            console.log('Loading keywords...');
 
             const data = await chrome.storage.local.get(['blockedKeywords']);
-            console.log('📦 Storage data:', data);
+            console.log('Storage data:', data);
 
             let keywords = data.blockedKeywords;
 
             if (!keywords || keywords.length === 0)
             {
-                console.log('📝 No keywords found, using defaults');
+                console.log('No keywords found, using defaults');
                 keywords = [...this.defaultKeywords];
 
                 await chrome.storage.local.set({ blockedKeywords: keywords });
-                console.log('💾 Default keywords saved to storage');
+                console.log('Default keywords saved to storage');
             }
 
-            console.log('✅ Keywords loaded:', keywords.length, 'keywords');
+            console.log('Keywords loaded:', keywords.length, 'keywords');
             this.renderKeywordsList(keywords);
 
         } catch (error)
         {
-            console.error('❌ Failed to load keywords:', error);
+            console.error('Failed to load keywords:', error);
 
-            console.log('🔄 Using fallback defaults');
+            console.log('Using fallback defaults');
             this.renderKeywordsList(this.defaultKeywords);
             this.showError('Failed to load keywords, showing defaults');
 
@@ -210,7 +209,7 @@ class OptionsManager
                 await chrome.storage.local.set({ blockedKeywords: this.defaultKeywords });
             } catch (saveError)
             {
-                console.error('❌ Failed to save fallback keywords:', saveError);
+                console.error('Failed to save fallback keywords:', saveError);
             }
         }
     }
@@ -218,30 +217,30 @@ class OptionsManager
     renderKeywordsList(keywords)
     {
         const container = document.getElementById('keywords-list');
-        if (!container) 
+        if (!container)
         {
-            console.warn('⚠️ Keywords list container not found');
+            console.warn('Keywords list container not found');
             return;
         }
 
-        console.log('🎨 Rendering', keywords.length, 'keywords');
+        console.log('Rendering', keywords.length, 'keywords');
 
         if (keywords.length === 0)
         {
-            container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No keywords blocked</div>';
+            container.innerHTML = '<div class="text-center text-muted p-3">No keywords blocked</div>';
             return;
         }
 
         container.innerHTML = keywords.map(keyword => `
             <div class="list-item">
                 <span>${this.escapeHtml(keyword)}</span>
-                <button class="remove-btn" onclick="optionsManager.removeKeyword('${this.escapeHtml(keyword)}')">
-                    🗑️ Remove
+                <button class="btn btn-sm btn-outline-danger" onclick="optionsManager.removeKeyword('${this.escapeHtml(keyword)}')">
+                    DELETE
                 </button>
             </div>
         `).join('');
 
-        console.log('✅ Keywords list rendered successfully');
+        console.log('Keywords list rendered successfully');
     }
 
     async addKeyword()
@@ -295,7 +294,7 @@ class OptionsManager
 
         } catch (error)
         {
-            console.error('❌ Add keyword error:', error);
+            console.error('Add keyword error:', error);
             this.showError('Failed to add keyword. Please try again.');
         }
     }
@@ -321,7 +320,7 @@ class OptionsManager
 
         } catch (error)
         {
-            console.error('❌ Remove keyword error:', error);
+            console.error('Remove keyword error:', error);
             this.showError('Failed to remove keyword. Please try again.');
         }
     }
@@ -358,7 +357,7 @@ class OptionsManager
         }
     }
 
-    // ============ DOMAINS MANAGEMENT ============
+    // DOMAINS MANAGEMENT
     setupDomainsEventListeners()
     {
         document.getElementById('add-domain')?.addEventListener('click', () => this.addDomain());
@@ -389,15 +388,15 @@ class OptionsManager
 
         if (domains.length === 0)
         {
-            container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No custom domains blocked</div>';
+            container.innerHTML = '<div class="text-center text-muted p-3">No custom domains blocked</div>';
             return;
         }
 
         container.innerHTML = domains.map(domain => `
             <div class="list-item">
                 <span>${this.escapeHtml(domain)}</span>
-                <button class="remove-btn" onclick="optionsManager.removeDomain('${this.escapeHtml(domain)}')">
-                    🗑️ Remove
+                <button class="btn btn-sm btn-outline-danger" onclick="optionsManager.removeDomain('${this.escapeHtml(domain)}')">
+                    DELETE
                 </button>
             </div>
         `).join('');
@@ -481,7 +480,7 @@ class OptionsManager
         }
     }
 
-    // ============ EXTENSION STATUS ============
+    // EXTENSION STATUS
     setupStatusEventListeners()
     {
         document.getElementById('test-blocking')?.addEventListener('click', () => this.testBlocking());
@@ -500,23 +499,19 @@ class OptionsManager
         {
             const data = await chrome.storage.local.get([
                 'blocksToday', 'focusStreak', 'totalBlocks', 'lastBlockDate',
-                'lastCloudSync', 'lastSyncDirection', 'lastImportDate', 'lastResetDate'
+                'lastImportDate', 'lastResetDate'
             ]);
 
-            let logText = '📋 Focus Guard Activity Log\n\n';
-            logText += `📊 Current Statistics:\n`;
+            let logText = 'Focus Guard Activity Log\n\n';
+            logText += `Current Statistics:\n`;
             logText += `- Blocks Today: ${data.blocksToday || 0}\n`;
             logText += `- Focus Streak: ${data.focusStreak || 0} days\n`;
             logText += `- Total Blocks: ${data.totalBlocks || 0}\n\n`;
 
-            logText += `📅 Important Dates:\n`;
+            logText += `Important Dates:\n`;
             if (data.lastBlockDate)
             {
                 logText += `- Last Block: ${data.lastBlockDate}\n`;
-            }
-            if (data.lastCloudSync)
-            {
-                logText += `- Last Cloud Sync: ${new Date(data.lastCloudSync).toLocaleString()} (${data.lastSyncDirection || 'unknown'})\n`;
             }
             if (data.lastImportDate)
             {
@@ -538,22 +533,17 @@ class OptionsManager
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            this.showSuccess('✅ Activity log exported!');
+            this.showSuccess('Activity log exported!');
 
         } catch (error)
         {
-            this.showError(`❌ Failed to generate activity log: ${error.message}`);
+            this.showError(`Failed to generate activity log: ${error.message}`);
         }
     }
 
-    // ============ ADVANCED SETTINGS ============
+    // ADVANCED SETTINGS
     setupAdvancedEventListeners()
     {
-        document.getElementById('auto-sync-enabled')?.addEventListener('change', (e) => this.toggleAutoSync(e.target.checked));
-        document.getElementById('sync-frequency')?.addEventListener('change', (e) => this.updateSyncFrequency(e.target.value));
-        document.getElementById('backup-retention')?.addEventListener('change', (e) => this.updateBackupRetention(e.target.value));
-        document.getElementById('cleanup-backups')?.addEventListener('click', () => this.cleanupBackups());
-
         // Backup & Restore
         document.getElementById('export-settings')?.addEventListener('click', () => this.exportSettings());
         document.getElementById('import-btn')?.addEventListener('click', () => this.importSettings());
@@ -561,66 +551,7 @@ class OptionsManager
         document.getElementById('import-file')?.addEventListener('change', (e) => this.handleImportFile(e));
     }
 
-    async toggleAutoSync(enabled)
-    {
-        try
-        {
-            await chrome.storage.local.set({ autoSyncEnabled: enabled });
-            await this.sendMessage({ action: 'setAutoSync', enabled });
-            this.showSuccess(`Auto-sync ${enabled ? 'enabled' : 'disabled'}!`);
-        } catch (error)
-        {
-            this.showError('Failed to update auto-sync setting.');
-        }
-    }
-
-    async updateSyncFrequency(frequency)
-    {
-        try
-        {
-            await chrome.storage.local.set({ syncFrequency: parseInt(frequency) });
-            await this.sendMessage({ action: 'setSyncFrequency', frequency: parseInt(frequency) });
-            this.showSuccess(`Sync frequency updated to ${frequency} minutes!`);
-        } catch (error)
-        {
-            this.showError('Failed to update sync frequency.');
-        }
-    }
-
-    async updateBackupRetention(retention)
-    {
-        try
-        {
-            await chrome.storage.local.set({ backupRetention: parseInt(retention) });
-            this.showSuccess(`Backup retention updated to ${retention} backups!`);
-        } catch (error)
-        {
-            this.showError('Failed to update backup retention.');
-        }
-    }
-
-    async cleanupBackups()
-    {
-        if (!confirm('Cleanup old backups? This will remove backups beyond the retention limit.')) return;
-
-        try
-        {
-            const response = await this.sendMessage({ action: 'cleanupBackups' });
-            if (response && response.success)
-            {
-                this.loadCloudBackups();
-                this.showSuccess(`✅ Cleaned up ${response.deletedCount || 0} old backups!`);
-            } else
-            {
-                this.showError('Failed to cleanup backups.');
-            }
-        } catch (error)
-        {
-            this.showError(`❌ Cleanup failed: ${error.message}`);
-        }
-    }
-
-    // ============ BACKUP & RESTORE ============
+    // BACKUP & RESTORE
     async exportSettings()
     {
         try
@@ -658,10 +589,10 @@ class OptionsManager
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            this.showSuccess('✅ Settings exported successfully!');
+            this.showSuccess('Settings exported successfully!');
         } catch (error)
         {
-            this.showError(`❌ Failed to export settings: ${error.message}`);
+            this.showError(`Failed to export settings: ${error.message}`);
         }
     }
 
@@ -712,12 +643,12 @@ class OptionsManager
             await chrome.storage.local.set(settingsToImport);
             await this.loadAllSettings();
 
-            this.showMessage(messageEl, '✅ Settings imported successfully!', 'success');
+            this.showMessage(messageEl, 'Settings imported successfully!', 'success');
 
         } catch (error)
         {
-            console.error('❌ Import error:', error);
-            this.showMessage(messageEl, `❌ Failed to import settings: ${error.message}`, 'error');
+            console.error('Import error:', error);
+            this.showMessage(messageEl, `Failed to import settings: ${error.message}`, 'error');
         } finally
         {
             event.target.value = '';
@@ -726,7 +657,7 @@ class OptionsManager
 
     async resetAllSettings()
     {
-        if (!confirm('⚠️ Reset ALL settings to defaults?\n\nThis will:\n- Clear all custom domains and keywords\n- Reset PIN to 1234\n- Clear all statistics\n- Remove all blocklist sources\n\nThis action cannot be undone!'))
+        if (!confirm('Reset ALL settings to defaults?\n\nThis will:\n- Clear all custom domains and keywords\n- Reset PIN to 1234\n- Clear all statistics\n- Remove all blocklist sources\n\nThis action cannot be undone!'))
         {
             return;
         }
@@ -753,18 +684,18 @@ class OptionsManager
             });
 
             await this.loadAllSettings();
-            this.showSuccess('✅ All settings reset to defaults!');
+            this.showSuccess('All settings reset to defaults!');
 
         } catch (error)
         {
-            this.showError(`❌ Failed to reset settings: ${error.message}`);
+            this.showError(`Failed to reset settings: ${error.message}`);
         }
     }
 
-    // ============ UTILITY METHODS ============
+    // UTILITY METHODS
     async loadAllSettings()
     {
-        console.log('🔄 Loading all settings...');
+        console.log('Loading all settings...');
 
         try
         {
@@ -772,12 +703,11 @@ class OptionsManager
             await this.loadStats();
             await this.loadKeywords();
             await this.loadDomains();
-            await this.loadAdvancedSettings();
 
-            console.log('✅ All settings loaded successfully');
+            console.log('All settings loaded successfully');
         } catch (error)
         {
-            console.error('❌ Failed to load some settings:', error);
+            console.error('Failed to load some settings:', error);
         }
     }
 
@@ -822,39 +752,7 @@ class OptionsManager
 
         } catch (error)
         {
-            console.error('❌ Failed to load stats:', error);
-        }
-    }
-
-    async loadAdvancedSettings()
-    {
-        try
-        {
-            const data = await chrome.storage.local.get([
-                'autoSyncEnabled', 'syncFrequency', 'backupRetention'
-            ]);
-
-            const autoSyncEl = document.getElementById('auto-sync-enabled');
-            if (autoSyncEl)
-            {
-                autoSyncEl.checked = data.autoSyncEnabled !== false;
-            }
-
-            const syncFreqEl = document.getElementById('sync-frequency');
-            if (syncFreqEl)
-            {
-                syncFreqEl.value = data.syncFrequency || 5;
-            }
-
-            const backupRetentionEl = document.getElementById('backup-retention');
-            if (backupRetentionEl)
-            {
-                backupRetentionEl.value = data.backupRetention || 10;
-            }
-
-        } catch (error)
-        {
-            console.error('❌ Failed to load advanced settings:', error);
+            console.error('Failed to load stats:', error);
         }
     }
 
@@ -875,7 +773,7 @@ class OptionsManager
         }
     }
 
-    // ============ HELPER METHODS ============
+    // HELPER METHODS
     showMessage(element, message, type)
     {
         if (!element) return;
@@ -896,47 +794,53 @@ class OptionsManager
 
     showSuccess(message)
     {
-        console.log('✅', message);
+        console.log('Success:', message);
         this.showGlobalMessage(message, 'success');
     }
 
     showError(message)
     {
-        console.error('❌', message);
+        console.error('Error:', message);
         this.showGlobalMessage(message, 'error');
     }
 
     showGlobalMessage(message, type)
     {
-        const messageEl = document.createElement('div');
-        messageEl.className = type === 'success' ? 'success-message' : 'error-message';
-        messageEl.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 10000;
-            max-width: 400px;
-            padding: 15px 20px;
-            border-radius: 12px;
-            font-weight: 500;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-            animation: slideInRight 0.4s ease-out;
+        // Create Bootstrap toast
+        const toastContainer = document.getElementById('toast-container') || this.createToastContainer();
+
+        const toastId = 'toast-' + Date.now();
+        const toastClass = type === 'success' ? 'bg-success' : 'bg-danger';
+
+        const toastHtml = `
+            <div id="${toastId}" class="toast ${toastClass} text-white" role="alert">
+                <div class="toast-body">
+                    ${message}
+                </div>
+            </div>
         `;
-        messageEl.textContent = message;
 
-        document.body.appendChild(messageEl);
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
 
-        setTimeout(() =>
+        const toastElement = document.getElementById(toastId);
+        const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
+        toast.show();
+
+        // Remove toast element after it's hidden
+        toastElement.addEventListener('hidden.bs.toast', () =>
         {
-            messageEl.style.animation = 'slideInRight 0.4s ease-out reverse';
-            setTimeout(() =>
-            {
-                if (messageEl.parentNode)
-                {
-                    messageEl.parentNode.removeChild(messageEl);
-                }
-            }, 400);
-        }, 5000);
+            toastElement.remove();
+        });
+    }
+
+    createToastContainer()
+    {
+        const container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container position-fixed top-0 end-0 p-3';
+        container.style.zIndex = '1100';
+        document.body.appendChild(container);
+        return container;
     }
 
     sendMessage(message)
@@ -976,8 +880,4 @@ class OptionsManager
         const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/;
         return domainRegex.test(domain) && domain.includes('.');
     }
-
-    // Placeholder methods for cloud functionality
-    async initializeSupabaseFeatures() { /* Implemented in options-cloud.js */ }
-    async loadCloudBackups() { /* Implemented in options-cloud.js */ }
 }
