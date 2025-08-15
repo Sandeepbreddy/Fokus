@@ -1,6 +1,5 @@
-// debug-test.js - Debug test page JavaScript
 
-console.log('🔧 Debug test page loaded');
+console.log('Debug test page loaded');
 
 async function loadExtensionStatus()
 {

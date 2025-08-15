@@ -1,8 +1,4 @@
-// background.js - Updated with better authentication error handling
-
 console.log('Fokus Extension - Background Script Starting...');
-
-// IMPORTS AND INITIALIZATION
 let supabaseClient = null;
 let contentBlocker = null;
 
@@ -11,7 +7,6 @@ async function loadSupabaseClient()
 {
     try
     {
-        // Import the Supabase client
         const supabaseModule = await import(chrome.runtime.getURL('supabase-client.js'));
         return supabaseModule.SupabaseClient || window.SupabaseClient;
     } catch (error)
@@ -35,30 +30,26 @@ async function initializeSupabase()
 
             if (initialized)
             {
-                console.log('✅ Supabase client initialized');
-
-                // Setup auto-sync if user is authenticated
+                console.log('Supabase client initialized');
                 if (supabaseClient.isAuthenticated())
                 {
                     await supabaseClient.setupAutoSync();
                 }
             } else
             {
-                console.log('⚠️ Supabase not configured, running in local mode');
-                supabaseClient = null; // Set to null if init failed
+                supabaseClient = null;
             }
         } else
         {
-            console.log('⚠️ Supabase client not available, running in local mode');
+            console.log('Supabase client not available, running in local mode');
         }
     } catch (error)
     {
-        console.error('❌ Failed to initialize Supabase:', error);
-        supabaseClient = null; // Ensure it's null on error
+        console.error('Failed to initialize Supabase:', error);
+        supabaseClient = null;
     }
 }
 
-// CONTENT BLOCKER CLASS (keeping existing code)
 class ContentBlocker
 {
     constructor()
@@ -68,14 +59,13 @@ class ContentBlocker
         this.blockedKeywords = new Set();
         this.isActive = true;
         this.lastGithubUpdate = 0;
-        this.githubUpdateInterval = 24 * 60 * 60 * 1000; // 24 hours
+        this.githubUpdateInterval = 24 * 60 * 60 * 1000;
 
         this.init();
     }
 
     async init()
     {
-        console.log('Initializing Content Blocker...');
 
         try
         {
@@ -112,7 +102,8 @@ class ContentBlocker
         const defaultKeywords = [
             'adult', 'porn', 'xxx', 'sex', 'nude', 'naked', 'nsfw',
             'explicit', 'mature', 'erotic', 'lesbian', 'gay', 'anal',
-            'oral', 'bdsm', 'fetish', 'webcam', 'escort', 'dating'
+            'oral', 'bdsm', 'fetish', 'webcam', 'escort', 'dating', 'japanese uncensored',
+            'japanese decensored'
         ];
 
         await chrome.storage.local.set({
@@ -125,8 +116,6 @@ class ContentBlocker
             totalBlocks: 0,
             installDate: new Date().toISOString()
         });
-
-        console.log('Default settings initialized');
     }
 
     setupBlocking()
@@ -188,7 +177,7 @@ class ContentBlocker
             }
         } catch (error)
         {
-            // Ignore invalid URLs
+            console.log('Error checking URL:', error);
         }
     }
 
@@ -211,8 +200,6 @@ class ContentBlocker
             {
                 await chrome.storage.local.set({ pin: '1234' });
             }
-
-            console.log('Settings loaded');
         } catch (error)
         {
             console.error('Failed to load settings:', error);
@@ -259,12 +246,9 @@ class ContentBlocker
             const lowerKeyword = keyword.toLowerCase();
 
             // Check for partial matches using includes()
-            // This will catch variations like:
-            // 'porn' matches 'japanporn', 'indianporn', 'pornhub', etc.
-            // 'sex' matches 'sexvideo', 'freesex', 'sexcam', etc.
             if (lowerText.includes(lowerKeyword))
             {
-                console.log(`🚫 Blocked keyword detected: "${lowerKeyword}" in "${text}"`);
+                console.log(`Blocked keyword detected: "${lowerKeyword}" in "${text}"`);
                 return true;
             }
         }
@@ -436,7 +420,6 @@ class ContentBlocker
     }
 }
 
-// AUTHENTICATION METHODS - IMPROVED ERROR HANDLING
 async function getAuthStatus()
 {
     try
@@ -479,12 +462,10 @@ async function signIn(email, password)
 {
     try
     {
-        // Check if cloud features are available
         if (!supabaseClient)
         {
             console.log('No Supabase client available, enabling offline mode instead');
 
-            // Enable offline mode for this session
             const duration = 24 * 60 * 60 * 1000; // 24 hours
             const expiry = Date.now() + duration;
 
@@ -520,8 +501,6 @@ async function signIn(email, password)
     } catch (error)
     {
         console.error('Sign in failed:', error);
-
-        // If cloud is unavailable, offer offline mode as fallback
         if (error.message.includes('Cloud features not available') ||
             error.message.includes('fetch'))
         {
