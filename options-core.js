@@ -806,41 +806,92 @@ class OptionsManager
 
     showGlobalMessage(message, type)
     {
-        // Create Bootstrap toast
-        const toastContainer = document.getElementById('toast-container') || this.createToastContainer();
+        // Create simple toast notification without Bootstrap dependency
+        const toast = document.createElement('div');
+        toast.className = `toast-notification ${type === 'success' ? 'toast-success' : 'toast-error'}`;
+        toast.textContent = message;
 
-        const toastId = 'toast-' + Date.now();
-        const toastClass = type === 'success' ? 'bg-success' : 'bg-danger';
-
-        const toastHtml = `
-            <div id="${toastId}" class="toast ${toastClass} text-white" role="alert">
-                <div class="toast-body">
-                    ${message}
-                </div>
-            </div>
+        // Style the toast
+        const baseStyles = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            max-width: 400px;
+            padding: 15px 20px;
+            border-radius: 12px;
+            font-weight: 500;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+            animation: slideInRight 0.4s ease-out;
         `;
 
-        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        const successStyles = `
+            background: linear-gradient(135deg, #d4edda, #c3e6cb);
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        `;
 
-        const toastElement = document.getElementById(toastId);
-        const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
-        toast.show();
+        const errorStyles = `
+            background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+        `;
 
-        // Remove toast element after it's hidden
-        toastElement.addEventListener('hidden.bs.toast', () =>
+        toast.style.cssText = baseStyles + (type === 'success' ? successStyles : errorStyles);
+
+        // Add animation keyframes if not already present
+        if (!document.getElementById('toast-animations'))
         {
-            toastElement.remove();
-        });
+            const style = document.createElement('style');
+            style.id = 'toast-animations';
+            style.textContent = `
+                @keyframes slideInRight {
+                    from {
+                        opacity: 0;
+                        transform: translateX(30px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateX(0);
+                    }
+                }
+                @keyframes slideOutRight {
+                    from {
+                        opacity: 1;
+                        transform: translateX(0);
+                    }
+                    to {
+                        opacity: 0;
+                        transform: translateX(30px);
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        document.body.appendChild(toast);
+
+        // Auto remove after 5 seconds
+        setTimeout(() =>
+        {
+            if (toast.parentNode)
+            {
+                toast.style.animation = 'slideOutRight 0.4s ease-out';
+                setTimeout(() =>
+                {
+                    if (toast.parentNode)
+                    {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 400);
+            }
+        }, 5000);
     }
 
     createToastContainer()
     {
-        const container = document.createElement('div');
-        container.id = 'toast-container';
-        container.className = 'toast-container position-fixed top-0 end-0 p-3';
-        container.style.zIndex = '1100';
-        document.body.appendChild(container);
-        return container;
+        // Not needed anymore since we're using fixed positioning
+        return null;
     }
 
     sendMessage(message)

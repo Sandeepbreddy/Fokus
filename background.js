@@ -1,6 +1,60 @@
-// background.js - Complete rewrite with robust error handling
+// background.js - Updated with authentication support
 
 console.log('Fokus Extension - Background Script Starting...');
+
+// IMPORTS AND INITIALIZATION
+let supabaseClient = null;
+let contentBlocker = null;
+
+// Load Supabase client dynamically
+async function loadSupabaseClient()
+{
+    try
+    {
+        // Import the Supabase client
+        const supabaseModule = await import(chrome.runtime.getURL('supabase-client.js'));
+        return supabaseModule.SupabaseClient || window.SupabaseClient;
+    } catch (error)
+    {
+        console.log('Supabase client not available:', error);
+        return null;
+    }
+}
+
+// Initialize Supabase client if available
+async function initializeSupabase()
+{
+    try
+    {
+        const SupabaseClientClass = await loadSupabaseClient();
+
+        if (SupabaseClientClass)
+        {
+            supabaseClient = new SupabaseClientClass();
+            const initialized = await supabaseClient.init();
+
+            if (initialized)
+            {
+                console.log('✅ Supabase client initialized');
+
+                // Setup auto-sync if user is authenticated
+                if (supabaseClient.isAuthenticated())
+                {
+                    await supabaseClient.setupAutoSync();
+                }
+            } else
+            {
+                console.log('⚠️ Supabase not configured, running in local mode');
+            }
+        } else
+        {
+            console.log('⚠️ Supabase client not available, running in local mode');
+        }
+    } catch (error)
+    {
+        console.error('❌ Failed to initialize Supabase:', error);
+    }
+}
 
 // CONTENT BLOCKER CLASS
 class ContentBlocker
@@ -48,7 +102,8 @@ class ContentBlocker
 
             if (details.reason === 'install')
             {
-                console.log('First time install');
+                console.log('First time install - setting up defaults');
+                await this.setupDefaults();
             }
         });
 
@@ -57,6 +112,28 @@ class ContentBlocker
         {
             console.log('Browser startup');
         });
+    }
+
+    async setupDefaults()
+    {
+        const defaultKeywords = [
+            'adult', 'porn', 'xxx', 'sex', 'nude', 'naked', 'nsfw',
+            'explicit', 'mature', 'erotic', 'lesbian', 'gay', 'anal',
+            'oral', 'bdsm', 'fetish', 'webcam', 'escort', 'dating'
+        ];
+
+        await chrome.storage.local.set({
+            pin: '1234',
+            blockedKeywords: defaultKeywords,
+            customDomains: [],
+            isActive: true,
+            blocksToday: 0,
+            focusStreak: 0,
+            totalBlocks: 0,
+            installDate: new Date().toISOString()
+        });
+
+        console.log('Default settings initialized');
     }
 
     setupBlocking()
@@ -96,7 +173,8 @@ class ContentBlocker
             const urlObj = new URL(url);
 
             // Skip extension pages
-            if (urlObj.protocol === 'chrome-extension:') return;
+            if (urlObj.protocol === 'chrome-extension:' ||
+                urlObj.protocol === 'moz-extension:') return;
 
             // Check domain blocking
             if (await this.isDomainBlocked(urlObj.hostname))
@@ -369,32 +447,165 @@ class ContentBlocker
     }
 }
 
+// AUTHENTICATION METHODS
+async function getAuthStatus()
+{
+    try
+    {
+        if (supabaseClient && supabaseClient.isAuthenticated())
+        {
+            return {
+                isAuthenticated: true,
+                user: supabaseClient.getCurrentUser()
+            };
+        }
+
+        // Check for offline mode
+        const offlineData = await chrome.storage.local.get(['offlineMode', 'offlineExpiry']);
+        if (offlineData.offlineMode && offlineData.offlineExpiry > Date.now())
+        {
+            return {
+                isAuthenticated: true,
+                isOfflineMode: true,
+                user: { email: 'offline@mode.local' }
+            };
+        }
+
+        return { isAuthenticated: false };
+    } catch (error)
+    {
+        console.error('Failed to get auth status:', error);
+        return { isAuthenticated: false };
+    }
+}
+
+async function signIn(email, password)
+{
+    try
+    {
+        if (!supabaseClient)
+        {
+            throw new Error('Cloud features not available');
+        }
+
+        const result = await supabaseClient.signIn(email, password);
+
+        if (result.success)
+        {
+            // Sync settings after successful sign in
+            try
+            {
+                await supabaseClient.syncFromCloud();
+            } catch (syncError)
+            {
+                console.warn('Failed to sync after sign in:', syncError);
+            }
+        }
+
+        return result;
+    } catch (error)
+    {
+        console.error('Sign in failed:', error);
+        throw error;
+    }
+}
+
+async function signUp(email, password)
+{
+    try
+    {
+        if (!supabaseClient)
+        {
+            throw new Error('Cloud features not available');
+        }
+
+        return await supabaseClient.signUp(email, password);
+    } catch (error)
+    {
+        console.error('Sign up failed:', error);
+        throw error;
+    }
+}
+
+async function signOut()
+{
+    try
+    {
+        if (supabaseClient)
+        {
+            return await supabaseClient.signOut();
+        }
+        return { success: true };
+    } catch (error)
+    {
+        console.error('Sign out failed:', error);
+        return { success: true }; // Always succeed locally
+    }
+}
+
+async function syncToCloud()
+{
+    try
+    {
+        if (!supabaseClient || !supabaseClient.isAuthenticated())
+        {
+            throw new Error('Not authenticated');
+        }
+
+        return await supabaseClient.syncToCloud();
+    } catch (error)
+    {
+        console.error('Sync to cloud failed:', error);
+        throw error;
+    }
+}
+
+async function syncFromCloud()
+{
+    try
+    {
+        if (!supabaseClient || !supabaseClient.isAuthenticated())
+        {
+            throw new Error('Not authenticated');
+        }
+
+        return await supabaseClient.syncFromCloud();
+    } catch (error)
+    {
+        console.error('Sync from cloud failed:', error);
+        throw error;
+    }
+}
+
 // INITIALIZATION
-
-let contentBlocker;
-
-try
+async function initialize()
 {
-    contentBlocker = new ContentBlocker();
-    console.log('Content Blocker created successfully');
-} catch (error)
-{
-    console.error('Failed to create Content Blocker:', error);
+    try
+    {
+        // Initialize Supabase client
+        await initializeSupabase();
 
-    // Create minimal fallback
-    contentBlocker = {
-        addCustomDomain: async () => ({ success: false, error: 'Service unavailable' }),
-        removeCustomDomain: async () => ({ success: false, error: 'Service unavailable' }),
-        addKeyword: async () => ({ success: false, error: 'Service unavailable' }),
-        removeKeyword: async () => ({ success: false, error: 'Service unavailable' }),
-        setActive: async () => ({ success: false, error: 'Service unavailable' }),
-        getCurrentTab: async () => ({ url: null }),
-        addDomainFromTab: async () => ({ success: false, error: 'Service unavailable' })
-    };
+        // Initialize content blocker
+        contentBlocker = new ContentBlocker();
+        console.log('Content Blocker created successfully');
+    } catch (error)
+    {
+        console.error('Failed to initialize:', error);
+
+        // Create minimal fallback
+        contentBlocker = {
+            addCustomDomain: async () => ({ success: false, error: 'Service unavailable' }),
+            removeCustomDomain: async () => ({ success: false, error: 'Service unavailable' }),
+            addKeyword: async () => ({ success: false, error: 'Service unavailable' }),
+            removeKeyword: async () => ({ success: false, error: 'Service unavailable' }),
+            setActive: async () => ({ success: false, error: 'Service unavailable' }),
+            getCurrentTab: async () => ({ url: null }),
+            addDomainFromTab: async () => ({ success: false, error: 'Service unavailable' })
+        };
+    }
 }
 
 // MESSAGE HANDLER
-
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
 {
     console.log('Message received:', message.action);
@@ -407,6 +618,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
 
             switch (message.action)
             {
+                // Authentication
+                case 'getAuthStatus':
+                    result = await getAuthStatus();
+                    break;
+
+                case 'signIn':
+                    result = await signIn(message.email, message.password);
+                    break;
+
+                case 'signUp':
+                    result = await signUp(message.email, message.password);
+                    break;
+
+                case 'signOut':
+                    result = await signOut();
+                    break;
+
+                // Cloud sync
+                case 'syncToCloud':
+                    result = await syncToCloud();
+                    break;
+
+                case 'syncFromCloud':
+                    result = await syncFromCloud();
+                    break;
+
                 // Domain management
                 case 'addCustomDomain':
                     result = await contentBlocker.addCustomDomain(message.domain);
@@ -439,7 +676,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
                     result = await contentBlocker.getCurrentTab();
                     break;
 
-                // Blocklist operations (simplified)
+                // Blocklist operations (simplified for now)
                 case 'addBlocklistUrl':
                 case 'removeBlocklistUrl':
                 case 'toggleBlocklistUrl':
@@ -464,5 +701,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
 
     return true; // Will respond asynchronously
 });
+
+// Start initialization
+initialize();
 
 console.log('Background script loaded successfully');
