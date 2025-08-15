@@ -42,170 +42,129 @@
         <div class="settings-grid">
             <!-- Blocked Keywords -->
             <div class="card">
-                <div class="card-body">
-                    <h3>Blocked Keywords</h3>
+                <h3>Blocked Keywords</h3>
 
-                    <div class="form-group">
-                        <label for="new-keyword">Add New Keyword:</label>
-                        <input type="text" id="new-keyword" placeholder="Enter keyword to block">
-                    </div>
-                    <button class="btn btn-primary" id="add-keyword">ADD</button>
+                <div class="form-group">
+                    <label for="new-keyword">Add New Keyword:</label>
+                    <input type="text" id="new-keyword" placeholder="Enter keyword to block">
+                </div>
+                <button class="btn btn-primary" id="add-keyword">ADD KEYWORD</button>
 
-                    <div class="list-container" id="keywords-list">
-                        <div class="loading">Loading keywords...</div>
-                    </div>
+                <div class="keywords-container" id="keywords-container">
+                    <div class="keywords-empty">Loading keywords...</div>
+                </div>
 
-                    <div class="btn-group">
-                        <button class="btn btn-secondary" id="reset-keywords">RESET</button>
-                        <button class="btn btn-danger" id="clear-keywords">CLEAR ALL</button>
-                    </div>
+                <div class="btn-group">
+                    <button class="btn btn-secondary" id="reset-keywords">RESET TO DEFAULTS</button>
+                    <button class="btn btn-danger" id="clear-keywords">CLEAR ALL</button>
                 </div>
             </div>
 
             <!-- Custom Domains -->
             <div class="card">
-                <div class="card-body">
-                    <h3>Custom Blocked Domains</h3>
+                <h3>Custom Blocked Domains</h3>
 
-                    <div class="form-group">
-                        <label for="new-domain">Add New Domain:</label>
-                        <input type="text" id="new-domain" placeholder="example.com">
-                    </div>
-                    <button class="btn btn-primary" id="add-domain">ADD</button>
+                <div class="form-group">
+                    <label for="new-domain">Add New Domain:</label>
+                    <input type="text" id="new-domain" placeholder="example.com">
+                </div>
+                <button class="btn btn-primary" id="add-domain">ADD DOMAIN</button>
 
-                    <div class="list-container" id="domains-list">
-                        <div class="loading">Loading domains...</div>
-                    </div>
+                <div class="list-container" id="domains-list">
+                    <div class="loading">Loading domains...</div>
+                </div>
 
-                    <div class="btn-group">
-                        <button class="btn btn-danger" id="clear-domains">CLEAR ALL</button>
-                    </div>
+                <div class="btn-group">
+                    <button class="btn btn-danger" id="clear-domains">CLEAR ALL</button>
                 </div>
             </div>
 
             <!-- Blocklist Management -->
             <div class="card">
-                <div class="card-body">
-                    <h3>Blocklist Sources</h3>
-                    <p class="description">Manage multiple GitHub blocklist sources. The extension automatically
-                        combines all enabled lists.</p>
+                <h3>Blocklist Sources</h3>
+                <p class="description">Automatically block domains from trusted community blocklists.</p>
 
-                    <button class="btn btn-primary" id="add-blocklist-btn">ADD SOURCE</button>
+                <div id="blocklists-container">
+                    <div class="loading">Loading blocklist sources...</div>
+                </div>
 
-                    <div class="list-container" id="blocklists-container">
-                        <div class="loading">Loading blocklist sources...</div>
-                    </div>
-
-                    <!-- Blocklist Controls -->
-                    <div class="controls-section">
-                        <div class="info-row">
-                            <span>Last Update:</span>
-                            <span id="last-update">Never</span>
-                        </div>
-
-                        <div class="progress-bar" id="update-progress" style="display: none;">
-                            <div class="progress-fill" id="progress-fill"></div>
-                        </div>
-
-                        <div class="btn-group">
-                            <button class="btn btn-success" id="force-update">UPDATE ALL</button>
-                            <button class="btn btn-info" id="view-blocked-count">STATISTICS</button>
-                            <button class="btn btn-secondary" id="test-blocklist-url">TEST URL</button>
-                        </div>
-                    </div>
+                <div class="btn-group">
+                    <button class="btn btn-success" id="force-update">UPDATE ALL LISTS</button>
+                    <button class="btn btn-info" id="view-blocked-count">VIEW STATISTICS</button>
                 </div>
             </div>
 
             <!-- Local Backup & Restore -->
-            <div class="card">
-                <div class="card-body">
-                    <h3>Local Backup & Restore</h3>
-                    <p class="description">Export your settings for backup or import settings from another device.</p>
+            <div class="card compact">
+                <h3>Backup & Restore</h3>
+                <p class="description">Export your settings for backup or import from another device.</p>
 
-                    <div class="btn-group">
-                        <button class="btn btn-primary" id="export-settings">EXPORT</button>
-                        <button class="btn btn-secondary" id="import-btn">IMPORT</button>
-                        <input type="file" id="import-file" style="display: none;" accept=".json">
-                    </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="export-settings">EXPORT SETTINGS</button>
+                    <button class="btn btn-secondary" id="import-btn">IMPORT SETTINGS</button>
+                    <input type="file" id="import-file" style="display: none;" accept=".json">
+                </div>
 
-                    <div id="backup-message"></div>
+                <div id="backup-message"></div>
 
-                    <div class="warning-box">
-                        <h5>Danger Zone</h5>
-                        <p>This will restore all settings to default values and cannot be undone.</p>
-                        <button class="btn btn-danger" id="reset-all">RESET ALL</button>
-                    </div>
+                <div class="warning-box">
+                    <h5>⚠️ Reset All Settings</h5>
+                    <p>This will restore all settings to default values and cannot be undone.</p>
+                    <button class="btn btn-danger" id="reset-all">RESET TO DEFAULTS</button>
                 </div>
             </div>
 
             <!-- Extension Status -->
-            <div class="card">
-                <div class="card-body">
-                    <h3>Extension Status</h3>
+            <div class="card compact">
+                <h3>Extension Status</h3>
 
-                    <div class="status-section">
-                        <div class="status-row">
-                            <span>Protection Status:</span>
-                            <span id="protection-status" class="status-active">Active</span>
-                        </div>
-                        <div class="status-row">
-                            <span>Version:</span>
-                            <span>Fokus v1.0.0</span>
-                        </div>
-                        <div class="status-row">
-                            <span>Browser:</span>
-                            <span id="browser-info">Detecting...</span>
-                        </div>
+                <div class="info-box">
+                    <div><strong>Protection:</strong> <span id="protection-status" style="color: #2e7d32;">Active</span>
                     </div>
+                    <div><strong>Version:</strong> Fokus v1.0.0</div>
+                    <div><strong>Browser:</strong> <span id="browser-info">Detecting...</span></div>
+                </div>
 
-                    <div class="btn-group">
-                        <button class="btn btn-info" id="test-blocking">TEST</button>
-                        <button class="btn btn-secondary" id="view-logs">VIEW LOGS</button>
-                    </div>
+                <div class="btn-group">
+                    <button class="btn btn-info" id="test-blocking">TEST BLOCKING</button>
+                    <button class="btn btn-secondary" id="view-logs">EXPORT LOGS</button>
                 </div>
             </div>
 
             <!-- Advanced Settings -->
             <div class="card">
-                <div class="card-body">
-                    <h3>Advanced Settings</h3>
+                <h3>Security Settings</h3>
 
-                    <!-- PIN Protection -->
-                    <div class="section">
-                        <h4>PIN Protection</h4>
-                        <div class="info-box">
-                            <p><strong>Default PIN is 1234</strong></p>
-                            <small>If extension is uninstalled, PIN defaults to 1234.</small>
-                        </div>
+                <!-- PIN Protection -->
+                <div class="info-box">
+                    <p><strong>Current PIN: 1234</strong> (default)</p>
+                    <small>Change your PIN to prevent unauthorized settings changes</small>
+                </div>
 
-                        <div class="pin-section">
-                            <h5>Change Your PIN</h5>
+                <div class="pin-section">
+                    <h5>Change PIN</h5>
 
-                            <div class="form-group">
-                                <label for="current-pin">Current PIN:</label>
-                                <input type="password" id="current-pin" placeholder="Enter current PIN" maxlength="6">
-                            </div>
-
-                            <div class="form-group">
-                                <label for="new-pin">New PIN:</label>
-                                <input type="password" id="new-pin" placeholder="Enter new PIN (4-6 digits)"
-                                    maxlength="6">
-                                <small>Recommended: Use 4-6 digits that you can remember easily</small>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="confirm-pin">Confirm New PIN:</label>
-                                <input type="password" id="confirm-pin" placeholder="Confirm new PIN" maxlength="6">
-                            </div>
-
-                            <div class="btn-group">
-                                <button class="btn btn-primary" id="change-pin">CHANGE</button>
-                                <button class="btn btn-secondary" id="reset-to-default">RESET</button>
-                            </div>
-
-                            <div id="pin-message"></div>
-                        </div>
+                    <div class="form-row">
+                        <label for="current-pin">Current PIN:</label>
+                        <input type="password" id="current-pin" placeholder="Enter current PIN" maxlength="6">
                     </div>
+
+                    <div class="form-row">
+                        <label for="new-pin">New PIN:</label>
+                        <input type="password" id="new-pin" placeholder="4-6 digits" maxlength="6">
+                    </div>
+
+                    <div class="form-row">
+                        <label for="confirm-pin">Confirm PIN:</label>
+                        <input type="password" id="confirm-pin" placeholder="Confirm new PIN" maxlength="6">
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-primary" id="change-pin">CHANGE PIN</button>
+                        <button class="btn btn-secondary" id="reset-to-default">RESET TO 1234</button>
+                    </div>
+
+                    <div id="pin-message"></div>
                 </div>
             </div>
         </div>
@@ -214,45 +173,8 @@
         <div class="footer">
             <p>Fokus helps you maintain productivity and focus by blocking distracting content.</p>
             <p class="small">
-                Remember: No extension can prevent being disabled through browser settings. True focus comes from
-                within.
+                Your focus, your future. Every block brings you closer to your goals.
             </p>
-        </div>
-    </div>
-
-    <!-- Add Blocklist Modal -->
-    <div class="modal-overlay" id="add-blocklist-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5>Add New Blocklist Source</h5>
-                <button class="modal-close" id="close-blocklist-modal">&times;</button>
-            </div>
-
-            <div class="modal-body">
-                <div class="form-group">
-                    <label for="modal-blocklist-name">Name:</label>
-                    <input type="text" id="modal-blocklist-name" placeholder="e.g., Custom Adult Blocklist">
-                </div>
-
-                <div class="form-group">
-                    <label for="modal-blocklist-url">GitHub Raw URL:</label>
-                    <input type="url" id="modal-blocklist-url" placeholder="https://raw.githubusercontent.com/...">
-                    <small>Must be a valid GitHub raw URL</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="modal-blocklist-description">Description (optional):</label>
-                    <input type="text" id="modal-blocklist-description"
-                        placeholder="Brief description of this blocklist">
-                </div>
-
-                <button class="btn btn-info" id="test-modal-url">TEST URL</button>
-            </div>
-
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="cancel-blocklist">CANCEL</button>
-                <button class="btn btn-primary" id="submit-blocklist">ADD SOURCE</button>
-            </div>
         </div>
     </div>
 

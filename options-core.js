@@ -6,10 +6,73 @@ class OptionsManager
     {
         this.isInitialized = false;
         this.currentPin = null;
+        /*
+         * Top 50+ Keywords for Adult Content Blocking
+         * 
+         * Strategy: Use partial matching with root words to catch variations
+         * Examples of what gets blocked:
+         * 
+         * 'porn' blocks: japanporn, indianporn, pornhub, freeporn, pornstar
+         * 'sex' blocks: sexcam, cybersex, sexvideo, bisexual, unisex  
+         * 'masturbat' blocks: masturbation, masturbating, masturbator
+         * 'fuck' blocks: fucking, fucked, motherfucker
+         * 'escort' blocks: escorts, escorting, escortservice
+         * 
+         * This approach is more effective than exact matching and catches
+         * new variations automatically without manual updates.
+         */
         this.defaultKeywords = [
-            'adult', 'porn', 'xxx', 'sex', 'nude', 'naked', 'nsfw',
-            'explicit', 'mature', 'erotic', 'lesbian', 'gay', 'anal',
-            'oral', 'bdsm', 'fetish', 'webcam', 'escort', 'dating'
+            // Core adult terms
+            'porn', 'sex', 'xxx', 'adult', 'nude', 'naked', 'nsfw',
+            'explicit', 'mature', 'erotic', 'hardcore', 'softcore',
+
+            // Action-based terms  
+            'fuck', 'fucking', 'fucked', 'anal', 'oral', 'blowjob',
+            'handjob', 'masturbat', 'orgasm', 'climax', 'cumshot',
+
+            // Body parts
+            'penis', 'vagina', 'breast', 'boob', 'tit', 'ass', 'butt',
+            'cock', 'dick', 'pussy', 'clit', 'nipple',
+
+            // Fetish and BDSM
+            'bdsm', 'bondage', 'fetish', 'kink', 'domination', 'submission',
+            'slave', 'master', 'mistress', 'torture', 'whip',
+
+            // Adult categories and orientations
+            'lesbian', 'gay', 'homo', 'bisexual', 'trans', 'shemale',
+            'milf', 'teen', 'young', 'old', 'mature',
+
+            // Adult industry terms
+            'escort', 'prostitut', 'hooker', 'stripper', 'webcam',
+            'camgirl', 'camboy', 'livecam', 'chaturbate'
+        ];
+
+        // Default blocklist sources - Back to using StevenBlack
+        this.defaultBlocklists = [
+            {
+                id: 'stevenblack-porn',
+                name: 'StevenBlack Adult Content',
+                url: 'https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn-only/hosts',
+                description: 'Community-maintained adult content blocklist (12,000+ domains)',
+                enabled: true,
+                isDefault: true
+            },
+            {
+                id: 'stevenblack-gambling',
+                name: 'StevenBlack Gambling',
+                url: 'https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-only/hosts',
+                description: 'Community-maintained gambling sites blocklist',
+                enabled: false,
+                isDefault: true
+            },
+            {
+                id: 'stevenblack-social',
+                name: 'StevenBlack Social Media',
+                url: 'https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/social-only/hosts',
+                description: 'Community-maintained social media blocklist',
+                enabled: false,
+                isDefault: true
+            }
         ];
     }
 
@@ -21,6 +84,7 @@ class OptionsManager
         {
             this.setupEventListeners();
             await this.loadAllSettings();
+            await this.initializeDefaultBlocklists();
             this.updateBrowserInfo();
 
             this.isInitialized = true;
@@ -48,17 +112,63 @@ class OptionsManager
 
         // Advanced Settings
         this.setupAdvancedEventListeners();
+
+        // Blocklist Management
+        this.setupBlocklistEventListeners();
     }
 
-    // PIN MANAGEMENT
+    // PIN MANAGEMENT WITH VALIDATION
     setupPinEventListeners()
     {
-        document.getElementById('change-pin')?.addEventListener('click', () => this.changePIN());
+        const changeButton = document.getElementById('change-pin');
+        const currentPinInput = document.getElementById('current-pin');
+        const newPinInput = document.getElementById('new-pin');
+        const confirmPinInput = document.getElementById('confirm-pin');
+
+        // Initially disable button
+        if (changeButton) changeButton.disabled = true;
+
+        // Real-time validation
+        const validatePinForm = () =>
+        {
+            const currentPin = currentPinInput?.value || '';
+            const newPin = newPinInput?.value || '';
+            const confirmPin = confirmPinInput?.value || '';
+
+            const isValid = currentPin.length >= 4 &&
+                newPin.length >= 4 &&
+                confirmPin.length >= 4 &&
+                /^\d+$/.test(newPin) &&
+                newPin === confirmPin;
+
+            if (changeButton)
+            {
+                changeButton.disabled = !isValid;
+                if (!isValid)
+                {
+                    if (currentPin.length < 4) changeButton.textContent = 'ENTER CURRENT PIN';
+                    else if (newPin.length < 4) changeButton.textContent = 'ENTER NEW PIN';
+                    else if (confirmPin.length < 4) changeButton.textContent = 'CONFIRM PIN';
+                    else if (!/^\d+$/.test(newPin)) changeButton.textContent = 'NUMBERS ONLY';
+                    else if (newPin !== confirmPin) changeButton.textContent = 'PINS DON\'T MATCH';
+                    else changeButton.textContent = 'ENTER ALL FIELDS';
+                } else
+                {
+                    changeButton.textContent = 'CHANGE PIN';
+                }
+            }
+        };
+
+        currentPinInput?.addEventListener('input', validatePinForm);
+        newPinInput?.addEventListener('input', validatePinForm);
+        confirmPinInput?.addEventListener('input', validatePinForm);
+
+        changeButton?.addEventListener('click', () => this.changePIN());
         document.getElementById('reset-to-default')?.addEventListener('click', () => this.resetPinToDefault());
 
-        document.getElementById('confirm-pin')?.addEventListener('keypress', (e) =>
+        confirmPinInput?.addEventListener('keypress', (e) =>
         {
-            if (e.key === 'Enter') this.changePIN();
+            if (e.key === 'Enter' && !changeButton.disabled) this.changePIN();
         });
     }
 
@@ -81,15 +191,16 @@ class OptionsManager
         const newPin = document.getElementById('new-pin')?.value;
         const confirmPin = document.getElementById('confirm-pin')?.value;
         const messageEl = document.getElementById('pin-message');
+        const changeButton = document.getElementById('change-pin');
 
         if (!messageEl) return;
 
         messageEl.innerHTML = '';
 
+        // Validation is now handled by button state, but double-check
         if (!currentPin || !newPin || !confirmPin)
         {
-            this.showMessage(messageEl, 'Please fill in all PIN fields.', 'error');
-            return;
+            return; // Button should be disabled
         }
 
         if (currentPin !== this.currentPin)
@@ -98,22 +209,11 @@ class OptionsManager
             return;
         }
 
-        if (newPin !== confirmPin)
+        // Disable button during operation
+        if (changeButton)
         {
-            this.showMessage(messageEl, 'New PINs do not match.', 'error');
-            return;
-        }
-
-        if (newPin.length < 4)
-        {
-            this.showMessage(messageEl, 'PIN must be at least 4 characters.', 'error');
-            return;
-        }
-
-        if (!/^\d+$/.test(newPin))
-        {
-            this.showMessage(messageEl, 'PIN should contain only numbers.', 'error');
-            return;
+            changeButton.disabled = true;
+            changeButton.textContent = 'CHANGING...';
         }
 
         try
@@ -133,6 +233,14 @@ class OptionsManager
         {
             console.error('PIN change error:', error);
             this.showMessage(messageEl, 'Failed to change PIN. Please try again.', 'error');
+        } finally
+        {
+            // Re-enable validation
+            if (changeButton)
+            {
+                changeButton.disabled = true; // Will be re-enabled by input events
+                changeButton.textContent = 'ENTER ALL FIELDS';
+            }
         }
     }
 
@@ -161,13 +269,30 @@ class OptionsManager
         }
     }
 
-    // KEYWORDS MANAGEMENT
+    // KEYWORDS MANAGEMENT - TAG DISPLAY WITH VALIDATION
     setupKeywordsEventListeners()
     {
-        document.getElementById('add-keyword')?.addEventListener('click', () => this.addKeyword());
-        document.getElementById('new-keyword')?.addEventListener('keypress', (e) =>
+        const addButton = document.getElementById('add-keyword');
+        const keywordInput = document.getElementById('new-keyword');
+
+        // Initially disable button
+        if (addButton) addButton.disabled = true;
+
+        // Real-time validation
+        keywordInput?.addEventListener('input', (e) =>
         {
-            if (e.key === 'Enter') this.addKeyword();
+            const value = e.target.value.trim();
+            if (addButton)
+            {
+                addButton.disabled = value.length < 2;
+                addButton.textContent = value.length < 2 ? 'ENTER KEYWORD' : 'ADD KEYWORD';
+            }
+        });
+
+        addButton?.addEventListener('click', () => this.addKeyword());
+        keywordInput?.addEventListener('keypress', (e) =>
+        {
+            if (e.key === 'Enter' && !addButton.disabled) this.addKeyword();
         });
         document.getElementById('reset-keywords')?.addEventListener('click', () => this.resetKeywords());
         document.getElementById('clear-keywords')?.addEventListener('click', () => this.clearKeywords());
@@ -180,28 +305,21 @@ class OptionsManager
             console.log('Loading keywords...');
 
             const data = await chrome.storage.local.get(['blockedKeywords']);
-            console.log('Storage data:', data);
-
             let keywords = data.blockedKeywords;
 
             if (!keywords || keywords.length === 0)
             {
                 console.log('No keywords found, using defaults');
                 keywords = [...this.defaultKeywords];
-
                 await chrome.storage.local.set({ blockedKeywords: keywords });
-                console.log('Default keywords saved to storage');
             }
 
-            console.log('Keywords loaded:', keywords.length, 'keywords');
-            this.renderKeywordsList(keywords);
+            this.renderKeywordsTags(keywords);
 
         } catch (error)
         {
             console.error('Failed to load keywords:', error);
-
-            console.log('Using fallback defaults');
-            this.renderKeywordsList(this.defaultKeywords);
+            this.renderKeywordsTags(this.defaultKeywords);
             this.showError('Failed to load keywords, showing defaults');
 
             try
@@ -214,52 +332,62 @@ class OptionsManager
         }
     }
 
-    renderKeywordsList(keywords)
+    renderKeywordsTags(keywords)
     {
-        const container = document.getElementById('keywords-list');
+        const container = document.getElementById('keywords-container');
         if (!container)
         {
-            console.warn('Keywords list container not found');
+            console.warn('Keywords container not found');
             return;
         }
-
-        console.log('Rendering', keywords.length, 'keywords');
 
         if (keywords.length === 0)
         {
-            container.innerHTML = '<div class="text-center text-muted p-3">No keywords blocked</div>';
+            container.innerHTML = '<div class="keywords-empty">No keywords blocked</div>';
             return;
         }
 
-        container.innerHTML = keywords.map(keyword => `
-            <div class="list-item">
-                <span>${this.escapeHtml(keyword)}</span>
-                <button class="btn btn-sm btn-outline-danger" onclick="optionsManager.removeKeyword('${this.escapeHtml(keyword)}')">
-                    DELETE
+        const tagsHtml = keywords.map(keyword => `
+            <div class="keyword-tag" data-keyword="${this.escapeHtml(keyword)}">
+                <span class="keyword-text">${this.escapeHtml(keyword)}</span>
+                <button class="remove-keyword" title="Remove keyword">
+                    ×
                 </button>
             </div>
         `).join('');
 
-        console.log('Keywords list rendered successfully');
+        container.innerHTML = `<div class="keywords-tags">${tagsHtml}</div>`;
+
+        // Add event listeners for remove buttons
+        container.querySelectorAll('.remove-keyword').forEach(button =>
+        {
+            button.addEventListener('click', (e) =>
+            {
+                const keyword = e.target.closest('.keyword-tag').dataset.keyword;
+                this.removeKeyword(keyword);
+            });
+        });
     }
 
     async addKeyword()
     {
         const input = document.getElementById('new-keyword');
+        const addButton = document.getElementById('add-keyword');
         if (!input) return;
 
         const keyword = input.value.trim().toLowerCase();
 
-        if (!keyword)
+        // Validation is now handled by button state, but double-check
+        if (!keyword || keyword.length < 2)
         {
-            this.showError('Please enter a keyword.');
-            return;
+            return; // Button should be disabled, so this shouldn't happen
         }
 
-        if (keyword.length < 2)
+        // Disable button during operation
+        if (addButton)
         {
-            this.showError('Keyword must be at least 2 characters long.');
-            return;
+            addButton.disabled = true;
+            addButton.textContent = 'ADDING...';
         }
 
         try
@@ -267,7 +395,7 @@ class OptionsManager
             const data = await chrome.storage.local.get(['blockedKeywords']);
             const currentKeywords = data.blockedKeywords || [];
 
-            if (currentKeywords.length === 0 && !data.blockedKeywords)
+            if (currentKeywords.length === 0)
             {
                 await chrome.storage.local.set({ blockedKeywords: this.defaultKeywords });
                 currentKeywords.push(...this.defaultKeywords);
@@ -296,6 +424,14 @@ class OptionsManager
         {
             console.error('Add keyword error:', error);
             this.showError('Failed to add keyword. Please try again.');
+        } finally
+        {
+            // Re-enable button and reset text
+            if (addButton)
+            {
+                addButton.disabled = true; // Will be re-enabled by input event
+                addButton.textContent = 'ENTER KEYWORD';
+            }
         }
     }
 
@@ -357,13 +493,34 @@ class OptionsManager
         }
     }
 
-    // DOMAINS MANAGEMENT
+    // DOMAINS MANAGEMENT WITH VALIDATION
     setupDomainsEventListeners()
     {
-        document.getElementById('add-domain')?.addEventListener('click', () => this.addDomain());
-        document.getElementById('new-domain')?.addEventListener('keypress', (e) =>
+        const addButton = document.getElementById('add-domain');
+        const domainInput = document.getElementById('new-domain');
+
+        // Initially disable button
+        if (addButton) addButton.disabled = true;
+
+        // Real-time validation
+        domainInput?.addEventListener('input', (e) =>
         {
-            if (e.key === 'Enter') this.addDomain();
+            let value = e.target.value.trim().toLowerCase();
+            // Clean the input
+            value = value.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+
+            const isValid = value.length > 3 && this.isValidDomain(value);
+            if (addButton)
+            {
+                addButton.disabled = !isValid;
+                addButton.textContent = !isValid ? 'ENTER DOMAIN' : 'ADD DOMAIN';
+            }
+        });
+
+        addButton?.addEventListener('click', () => this.addDomain());
+        domainInput?.addEventListener('keypress', (e) =>
+        {
+            if (e.key === 'Enter' && !addButton.disabled) this.addDomain();
         });
         document.getElementById('clear-domains')?.addEventListener('click', () => this.clearDomains());
     }
@@ -388,39 +545,50 @@ class OptionsManager
 
         if (domains.length === 0)
         {
-            container.innerHTML = '<div class="text-center text-muted p-3">No custom domains blocked</div>';
+            container.innerHTML = '<div class="keywords-empty">No custom domains blocked</div>';
             return;
         }
 
         container.innerHTML = domains.map(domain => `
-            <div class="list-item">
+            <div class="list-item" data-domain="${this.escapeHtml(domain)}">
                 <span>${this.escapeHtml(domain)}</span>
-                <button class="btn btn-sm btn-outline-danger" onclick="optionsManager.removeDomain('${this.escapeHtml(domain)}')">
+                <button class="btn btn-sm btn-danger remove-domain">
                     DELETE
                 </button>
             </div>
         `).join('');
+
+        // Add event listeners for remove buttons
+        container.querySelectorAll('.remove-domain').forEach(button =>
+        {
+            button.addEventListener('click', (e) =>
+            {
+                const domain = e.target.closest('.list-item').dataset.domain;
+                this.removeDomain(domain);
+            });
+        });
     }
 
     async addDomain()
     {
         const input = document.getElementById('new-domain');
+        const addButton = document.getElementById('add-domain');
         if (!input) return;
 
         let domain = input.value.trim().toLowerCase();
-
-        if (!domain)
-        {
-            this.showError('Please enter a domain.');
-            return;
-        }
-
         domain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
 
-        if (!this.isValidDomain(domain))
+        // Validation is now handled by button state
+        if (!domain || !this.isValidDomain(domain))
         {
-            this.showError('Please enter a valid domain.');
-            return;
+            return; // Button should be disabled
+        }
+
+        // Disable button during operation
+        if (addButton)
+        {
+            addButton.disabled = true;
+            addButton.textContent = 'ADDING...';
         }
 
         try
@@ -439,6 +607,14 @@ class OptionsManager
         } catch (error)
         {
             this.showError('Failed to add domain.');
+        } finally
+        {
+            // Re-enable button and reset text
+            if (addButton)
+            {
+                addButton.disabled = true; // Will be re-enabled by input event
+                addButton.textContent = 'ENTER DOMAIN';
+            }
         }
     }
 
@@ -480,6 +656,362 @@ class OptionsManager
         }
     }
 
+    // BLOCKLIST MANAGEMENT
+    setupBlocklistEventListeners()
+    {
+        document.getElementById('force-update')?.addEventListener('click', () => this.forceUpdateBlocklists());
+        document.getElementById('view-blocked-count')?.addEventListener('click', () => this.viewBlockedCount());
+    }
+
+    async initializeDefaultBlocklists()
+    {
+        try
+        {
+            const data = await chrome.storage.local.get(['blocklistSources', 'blocklistInitialized']);
+
+            if (!data.blocklistInitialized)
+            {
+                await chrome.storage.local.set({
+                    blocklistSources: this.defaultBlocklists,
+                    blocklistInitialized: true,
+                    lastBlocklistUpdate: 0
+                });
+                console.log('Default blocklists initialized');
+            }
+
+            await this.loadBlocklistSources();
+        } catch (error)
+        {
+            console.error('Failed to initialize blocklists:', error);
+        }
+    }
+
+    async loadBlocklistSources()
+    {
+        try
+        {
+            const data = await chrome.storage.local.get(['blocklistSources', 'blocklistResults', 'lastBlocklistUpdate']);
+            const sources = data.blocklistSources || this.defaultBlocklists;
+            const results = data.blocklistResults || [];
+            const lastUpdate = data.lastBlocklistUpdate || 0;
+
+            this.renderBlocklistSources(sources, results, lastUpdate);
+        } catch (error)
+        {
+            console.error('Failed to load blocklist sources:', error);
+            this.showError('Failed to load blocklist sources');
+        }
+    }
+
+    renderBlocklistSources(sources, results, lastUpdate)
+    {
+        const container = document.getElementById('blocklists-container');
+        if (!container) return;
+
+        if (sources.length === 0)
+        {
+            container.innerHTML = '<div class="keywords-empty">No blocklist sources configured</div>';
+            return;
+        }
+
+        container.innerHTML = sources.map(source =>
+        {
+            const result = results.find(r => r.id === source.id) || {};
+            const isActive = source.enabled && result.success;
+            const domainCount = result.domainCount || 0;
+            const lastUpdated = result.lastUpdated ?
+                new Date(result.lastUpdated).toLocaleDateString() : 'Never';
+
+            return `
+                <div class="blocklist-item" data-source-id="${source.id}">
+                    <div class="blocklist-header">
+                        <div class="blocklist-name">${this.escapeHtml(source.name)}</div>
+                        <div class="blocklist-status">
+                            <span class="status-badge ${isActive ? 'active' : 'inactive'}">
+                                ${isActive ? 'ACTIVE' : (source.enabled ? 'FAILED' : 'DISABLED')}
+                            </span>
+                            ${isActive ? `<span>${domainCount.toLocaleString()} domains</span>` : ''}
+                        </div>
+                    </div>
+                    
+                    <div class="blocklist-info">
+                        ${this.escapeHtml(source.description || 'Community blocklist')}
+                    </div>
+                    
+                    <div class="blocklist-url">${this.escapeHtml(source.url)}</div>
+                    
+                    <div class="blocklist-actions">
+                        <label style="display: flex; align-items: center; gap: 5px; font-size: 13px;">
+                            <input type="checkbox" class="blocklist-toggle" ${source.enabled ? 'checked' : ''}>
+                            Enable
+                        </label>
+                        <span style="font-size: 12px; color: #666;">Last updated: ${lastUpdated}</span>
+                    </div>
+                    
+                    ${result.error ? `<div style="color: #d32f2f; font-size: 12px; margin-top: 8px;">Error: ${this.escapeHtml(result.error)}</div>` : ''}
+                </div>
+            `;
+        }).join('');
+
+        // Add event listeners for toggles
+        container.querySelectorAll('.blocklist-toggle').forEach(toggle =>
+        {
+            toggle.addEventListener('change', (e) =>
+            {
+                const sourceId = e.target.closest('.blocklist-item').dataset.sourceId;
+                this.toggleBlocklistSource(sourceId, e.target.checked);
+            });
+        });
+    }
+
+    async toggleBlocklistSource(id, enabled)
+    {
+        try
+        {
+            const data = await chrome.storage.local.get(['blocklistSources']);
+            const sources = data.blocklistSources || [];
+
+            const sourceIndex = sources.findIndex(s => s.id === id);
+            if (sourceIndex !== -1)
+            {
+                sources[sourceIndex].enabled = enabled;
+                await chrome.storage.local.set({ blocklistSources: sources });
+
+                await this.loadBlocklistSources();
+                await this.loadStats();
+
+                this.showSuccess(`Blocklist ${enabled ? 'enabled' : 'disabled'} successfully!`);
+            }
+        } catch (error)
+        {
+            console.error('Failed to toggle blocklist:', error);
+            this.showError('Failed to update blocklist setting');
+        }
+    }
+
+    async forceUpdateBlocklists()
+    {
+        const button = document.getElementById('force-update');
+        if (!button) return;
+
+        const originalText = button.textContent;
+        button.textContent = 'UPDATING...';
+        button.disabled = true;
+
+        try
+        {
+            const data = await chrome.storage.local.get(['blocklistSources']);
+            const sources = data.blocklistSources || this.defaultBlocklists;
+            const results = [];
+            let totalDomains = 0;
+
+            console.log('Starting blocklist update for', sources.length, 'sources');
+
+            for (const source of sources.filter(s => s.enabled))
+            {
+                try
+                {
+                    console.log(`Fetching blocklist: ${source.name} from ${source.url}`);
+
+                    // Always use background script for GitHub URLs
+                    console.log('Using background script to fetch blocklist...');
+
+                    const bgResponse = await this.sendMessage({
+                        action: 'fetchBlocklist',
+                        url: source.url
+                    });
+
+                    if (!bgResponse || !bgResponse.success)
+                    {
+                        throw new Error(bgResponse?.error || 'Background fetch failed');
+                    }
+
+                    const content = bgResponse.content;
+                    console.log(`Fetched ${content.length} bytes from ${source.name}`);
+
+                    const domains = this.parseHostsFile(content);
+
+                    if (domains.length === 0)
+                    {
+                        throw new Error('No valid domains found in hosts file');
+                    }
+
+                    results.push({
+                        id: source.id,
+                        success: true,
+                        domainCount: domains.length,
+                        lastUpdated: new Date().toISOString(),
+                        domains: domains
+                    });
+
+                    totalDomains += domains.length;
+                    console.log(`✅ ${source.name}: ${domains.length} domains loaded`);
+
+                } catch (error)
+                {
+                    console.error(`❌ Failed to update ${source.name}:`, error);
+
+                    results.push({
+                        id: source.id,
+                        success: false,
+                        error: error.message,
+                        lastUpdated: new Date().toISOString(),
+                        domains: []
+                    });
+                }
+            }
+
+            // Combine all domains from successful sources
+            const allDomains = results
+                .filter(r => r.success)
+                .flatMap(r => r.domains);
+
+            const uniqueDomains = [...new Set(allDomains)];
+
+            // Store results
+            await chrome.storage.local.set({
+                blocklistResults: results,
+                blockedDomains: uniqueDomains,
+                lastBlocklistUpdate: new Date().toISOString()
+            });
+
+            await this.loadBlocklistSources();
+            await this.loadStats();
+
+            button.textContent = 'UPDATED!';
+
+            const successCount = results.filter(r => r.success).length;
+            const failCount = results.filter(r => !r.success).length;
+
+            if (successCount > 0)
+            {
+                this.showSuccess(`✅ Updated! ${uniqueDomains.length} domains from ${successCount} source(s)`);
+            }
+
+            if (failCount > 0)
+            {
+                if (successCount === 0)
+                {
+                    this.showError(`❌ All ${failCount} source(s) failed to update`);
+                } else
+                {
+                    this.showError(`⚠️ ${failCount} source(s) failed, ${successCount} succeeded`);
+                }
+            }
+
+        } catch (error)
+        {
+            console.error('Update failed:', error);
+            button.textContent = 'UPDATE FAILED';
+            this.showError(`Update failed: ${error.message}`);
+        } finally
+        {
+            setTimeout(() =>
+            {
+                button.textContent = originalText;
+                button.disabled = false;
+            }, 2000);
+        }
+    }
+
+    parseHostsFile(content)
+    {
+        const domains = new Set();
+        const lines = content.split('\n');
+
+        console.log(`Parsing hosts file with ${lines.length} lines`);
+
+        for (const line of lines)
+        {
+            const trimmed = line.trim();
+
+            // Skip comments and empty lines
+            if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('!'))
+            {
+                continue;
+            }
+
+            // Parse hosts file format: "0.0.0.0 domain.com" or "127.0.0.1 domain.com"
+            const parts = trimmed.split(/\s+/);
+            if (parts.length >= 2)
+            {
+                const domain = parts[1].toLowerCase();
+
+                // Basic domain validation - more permissive
+                if (domain.includes('.') &&
+                    !domain.startsWith('.') &&
+                    !domain.includes('/') &&
+                    domain.length > 3 &&
+                    !domain.includes('localhost') &&
+                    !domain.includes('0.0.0.0') &&
+                    !domain.includes('127.0.0.1'))
+                {
+                    domains.add(domain);
+                }
+            }
+        }
+
+        console.log(`Parsed ${domains.size} valid domains from hosts file`);
+        return Array.from(domains);
+    }
+
+    async viewBlockedCount()
+    {
+        try
+        {
+            const data = await chrome.storage.local.get([
+                'blockedDomains', 'customDomains', 'blockedKeywords',
+                'blocklistResults', 'lastBlocklistUpdate'
+            ]);
+
+            const githubDomains = (data.blockedDomains || []).length;
+            const customDomains = (data.customDomains || []).length;
+            const keywords = (data.blockedKeywords || []).length;
+            const results = data.blocklistResults || [];
+            const lastUpdate = data.lastBlocklistUpdate ?
+                new Date(data.lastBlocklistUpdate).toLocaleString() : 'Never';
+
+            const activeResults = results.filter(r => r.success);
+            const failedResults = results.filter(r => !r.success);
+
+            let message = `📊 Blocking Statistics\n\n`;
+            message += `🛡️ Total Protection:\n`;
+            message += `• Blocklist Domains: ${githubDomains.toLocaleString()}\n`;
+            message += `• Custom Domains: ${customDomains.toLocaleString()}\n`;
+            message += `• Total Domains: ${(githubDomains + customDomains).toLocaleString()}\n`;
+            message += `• Blocked Keywords: ${keywords.toLocaleString()}\n\n`;
+
+            if (activeResults.length > 0)
+            {
+                message += `✅ Active Blocklists:\n`;
+                activeResults.forEach(result =>
+                {
+                    const source = data.blocklistSources?.find(s => s.id === result.id);
+                    message += `• ${source?.name || result.id}: ${result.domainCount.toLocaleString()} domains\n`;
+                });
+                message += `\n`;
+            }
+
+            if (failedResults.length > 0)
+            {
+                message += `❌ Failed Blocklists:\n`;
+                failedResults.forEach(result =>
+                {
+                    const source = data.blocklistSources?.find(s => s.id === result.id);
+                    message += `• ${source?.name || result.id}: ${result.error}\n`;
+                });
+                message += `\n`;
+            }
+
+            message += `🕒 Last Updated: ${lastUpdate}`;
+
+            alert(message);
+        } catch (error)
+        {
+            this.showError('Failed to load blocking statistics.');
+        }
+    }
+
     // EXTENSION STATUS
     setupStatusEventListeners()
     {
@@ -499,10 +1031,12 @@ class OptionsManager
         {
             const data = await chrome.storage.local.get([
                 'blocksToday', 'focusStreak', 'totalBlocks', 'lastBlockDate',
-                'lastImportDate', 'lastResetDate'
+                'lastImportDate', 'lastResetDate', 'lastBlocklistUpdate'
             ]);
 
-            let logText = 'Focus Guard Activity Log\n\n';
+            let logText = 'Fokus Extension Activity Log\n';
+            logText += '='.repeat(40) + '\n\n';
+
             logText += `Current Statistics:\n`;
             logText += `- Blocks Today: ${data.blocksToday || 0}\n`;
             logText += `- Focus Streak: ${data.focusStreak || 0} days\n`;
@@ -513,6 +1047,10 @@ class OptionsManager
             {
                 logText += `- Last Block: ${data.lastBlockDate}\n`;
             }
+            if (data.lastBlocklistUpdate)
+            {
+                logText += `- Last Blocklist Update: ${new Date(data.lastBlocklistUpdate).toLocaleString()}\n`;
+            }
             if (data.lastImportDate)
             {
                 logText += `- Last Settings Import: ${new Date(data.lastImportDate).toLocaleString()}\n`;
@@ -521,6 +1059,8 @@ class OptionsManager
             {
                 logText += `- Last Settings Reset: ${new Date(data.lastResetDate).toLocaleString()}\n`;
             }
+
+            logText += `\nGenerated: ${new Date().toLocaleString()}\n`;
 
             const blob = new Blob([logText], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
@@ -557,8 +1097,8 @@ class OptionsManager
         try
         {
             const data = await chrome.storage.local.get([
-                'blockedKeywords', 'customDomains', 'blocklistUrls', 'isActive',
-                'blocksToday', 'focusStreak', 'totalBlocks', 'lastGithubUpdate'
+                'blockedKeywords', 'customDomains', 'blocklistSources', 'isActive',
+                'blocksToday', 'focusStreak', 'totalBlocks', 'lastBlocklistUpdate'
             ]);
 
             const exportData = {
@@ -567,9 +1107,9 @@ class OptionsManager
                 settings: {
                     blockedKeywords: data.blockedKeywords || [],
                     customDomains: data.customDomains || [],
-                    blocklistUrls: data.blocklistUrls || [],
+                    blocklistSources: data.blocklistSources || [],
                     isActive: data.isActive !== undefined ? data.isActive : true,
-                    lastGithubUpdate: data.lastGithubUpdate || 0
+                    lastBlocklistUpdate: data.lastBlocklistUpdate || 0
                 },
                 stats: {
                     blocksToday: data.blocksToday || 0,
@@ -657,7 +1197,7 @@ class OptionsManager
 
     async resetAllSettings()
     {
-        if (!confirm('Reset ALL settings to defaults?\n\nThis will:\n- Clear all custom domains and keywords\n- Reset PIN to 1234\n- Clear all statistics\n- Remove all blocklist sources\n\nThis action cannot be undone!'))
+        if (!confirm('Reset ALL settings to defaults?\n\nThis will:\n- Clear all custom domains and keywords\n- Reset PIN to 1234\n- Clear all statistics\n- Reset blocklist sources\n\nThis action cannot be undone!'))
         {
             return;
         }
@@ -675,11 +1215,12 @@ class OptionsManager
                 pin: '1234',
                 blockedKeywords: this.defaultKeywords,
                 customDomains: [],
-                blocklistUrls: [],
+                blocklistSources: this.defaultBlocklists,
                 isActive: true,
                 blocksToday: 0,
                 focusStreak: 0,
                 totalBlocks: 0,
+                blocklistInitialized: true,
                 lastResetDate: new Date().toISOString()
             });
 
@@ -691,8 +1232,28 @@ class OptionsManager
             this.showError(`Failed to reset settings: ${error.message}`);
         }
     }
+    // Helper method for keyword matching (used in content scripts too)
+    containsBlockedKeywords(text)
+    {
+        if (!text || typeof text !== 'string') return false;
 
-    // UTILITY METHODS
+        const lowerText = text.toLowerCase();
+
+        for (const keyword of this.blockedKeywords)
+        {
+            const lowerKeyword = keyword.toLowerCase();
+
+            // Partial matching - catches variations like:
+            // 'porn' → 'japanporn', 'pornhub', 'freeporn'
+            // 'sex' → 'sexcam', 'cybersex', 'sexvideo' 
+            // 'masturbat' → 'masturbation', 'masturbating'
+            if (lowerText.includes(lowerKeyword))
+            {
+                return { found: true, keyword: lowerKeyword, originalText: text };
+            }
+        }
+        return { found: false };
+    }
     async loadAllSettings()
     {
         console.log('Loading all settings...');
@@ -703,6 +1264,7 @@ class OptionsManager
             await this.loadStats();
             await this.loadKeywords();
             await this.loadDomains();
+            await this.loadBlocklistSources();
 
             console.log('All settings loaded successfully');
         } catch (error)
@@ -806,7 +1368,7 @@ class OptionsManager
 
     showGlobalMessage(message, type)
     {
-        // Create simple toast notification without Bootstrap dependency
+        // Create simple toast notification
         const toast = document.createElement('div');
         toast.className = `toast-notification ${type === 'success' ? 'toast-success' : 'toast-error'}`;
         toast.textContent = message;
@@ -886,12 +1448,6 @@ class OptionsManager
                 }, 400);
             }
         }, 5000);
-    }
-
-    createToastContainer()
-    {
-        // Not needed anymore since we're using fixed positioning
-        return null;
     }
 
     sendMessage(message)
