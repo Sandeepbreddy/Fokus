@@ -1,5 +1,3 @@
-// popup.js - New authentication-first popup flow
-
 class FokusPopup
 {
     constructor()
@@ -12,19 +10,15 @@ class FokusPopup
 
     async init()
     {
-        console.log('🚀 Initializing Fokus popup...');
-
+        console.log('Initializing Fokus popup...');
         try
         {
             this.setupEventListeners();
-
-            // Check authentication status
             await this.checkAuthStatus();
-
-            console.log('✅ Popup initialized successfully');
+            console.log('Popup initialized successfully');
         } catch (error)
         {
-            console.error('❌ Failed to initialize popup:', error);
+            console.error('Failed to initialize popup:', error);
             this.showError('Failed to initialize. Please refresh.');
         }
     }
@@ -60,37 +54,34 @@ class FokusPopup
 
     async checkAuthStatus()
     {
-        console.log('🔍 Checking authentication status...');
-
+        console.log('Checking authentication status...');
         try
         {
-            // Check if user has valid session
             const response = await this.sendMessage({ action: 'getAuthStatus' });
 
             if (response && response.isAuthenticated && response.user)
             {
-                console.log('✅ User is authenticated:', response.user.email);
+                console.log('User is authenticated:', response.user.email);
                 this.currentUser = response.user;
                 this.isAuthenticated = true;
                 this.showDashboard();
             } else
             {
-                // Check for offline mode
                 const offlineData = await chrome.storage.local.get(['offlineMode', 'offlineExpiry']);
                 if (offlineData.offlineMode && offlineData.offlineExpiry > Date.now())
                 {
-                    console.log('⚡ Using offline mode');
+                    console.log('Using offline mode');
                     this.isOfflineMode = true;
                     this.showDashboard();
                 } else
                 {
-                    console.log('🔐 User not authenticated, showing auth form');
+                    console.log('User not authenticated, showing auth form');
                     this.showAuthentication();
                 }
             }
         } catch (error)
         {
-            console.error('❌ Auth check failed:', error);
+            console.error('Auth check failed:', error);
             this.showAuthentication();
         } finally
         {
@@ -114,8 +105,6 @@ class FokusPopup
     {
         document.getElementById('auth-section').style.display = 'flex';
         document.getElementById('dashboard-section').style.display = 'none';
-
-        // Focus on email input
         setTimeout(() =>
         {
             document.getElementById('signin-email')?.focus();
@@ -126,24 +115,16 @@ class FokusPopup
     {
         document.getElementById('auth-section').style.display = 'none';
         document.getElementById('dashboard-section').style.display = 'flex';
-
         this.loadDashboardData();
     }
 
     switchAuthTab(tab)
     {
-        // Update tab buttons
         document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
         document.getElementById(`${tab}-tab`).classList.add('active');
-
-        // Update forms
         document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
         document.getElementById(`${tab}-form`).classList.add('active');
-
-        // Clear messages
         this.clearAuthMessages();
-
-        // Focus on first input
         setTimeout(() =>
         {
             document.getElementById(`${tab}-email`)?.focus();
@@ -176,21 +157,20 @@ class FokusPopup
 
             if (response && response.success)
             {
-                this.showMessage(messageEl, '✅ Signed in successfully!', 'success');
+                this.showMessage(messageEl, 'Signed in successfully!', 'success');
                 this.currentUser = response.user;
                 this.isAuthenticated = true;
-
                 setTimeout(() =>
                 {
                     this.showDashboard();
                 }, 1000);
             } else
             {
-                this.showMessage(messageEl, '❌ ' + (response?.error || 'Sign in failed'), 'error');
+                this.showMessage(messageEl, response?.error || 'Sign in failed', 'error');
             }
         } catch (error)
         {
-            this.showMessage(messageEl, `❌ Sign in failed: ${error.message}`, 'error');
+            this.showMessage(messageEl, `Sign in failed: ${error.message}`, 'error');
         } finally
         {
             btn.textContent = 'Sign In';
@@ -240,24 +220,24 @@ class FokusPopup
                 if (response.needsConfirmation)
                 {
                     this.showMessage(messageEl,
-                        '✅ Account created! Please check your email for confirmation, then sign in.',
+                        'Account created! Please check your email for confirmation, then sign in.',
                         'success'
                     );
                     setTimeout(() => this.switchAuthTab('signin'), 3000);
                 } else
                 {
-                    this.showMessage(messageEl, '✅ Account created and signed in!', 'success');
+                    this.showMessage(messageEl, 'Account created and signed in!', 'success');
                     this.currentUser = response.user;
                     this.isAuthenticated = true;
                     setTimeout(() => this.showDashboard(), 1000);
                 }
             } else
             {
-                this.showMessage(messageEl, '❌ ' + (response?.error || 'Sign up failed'), 'error');
+                this.showMessage(messageEl, response?.error || 'Sign up failed', 'error');
             }
         } catch (error)
         {
-            this.showMessage(messageEl, `❌ Sign up failed: ${error.message}`, 'error');
+            this.showMessage(messageEl, `Sign up failed: ${error.message}`, 'error');
         } finally
         {
             btn.textContent = 'Create Account';
@@ -268,21 +248,17 @@ class FokusPopup
     async enableOfflineMode()
     {
         const btn = document.getElementById('offline-mode-btn');
-
         btn.textContent = 'Enabling...';
         btn.disabled = true;
 
         try
         {
-            // Set offline mode for 24 hours
-            const duration = 24 * 60 * 60 * 1000; // 24 hours
+            const duration = 24 * 60 * 60 * 1000;
             const expiry = Date.now() + duration;
-
             await chrome.storage.local.set({
                 offlineMode: true,
                 offlineExpiry: expiry
             });
-
             this.isOfflineMode = true;
             this.showDashboard();
         } catch (error)
@@ -297,26 +273,19 @@ class FokusPopup
     {
         try
         {
-            // Update user info
             if (this.isOfflineMode)
             {
                 document.getElementById('user-email').textContent = 'Offline Mode';
-                document.querySelector('.connection-status').textContent = '⚡ Working offline';
+                document.querySelector('.connection-status').textContent = 'Working offline';
             } else if (this.currentUser)
             {
                 document.getElementById('user-email').textContent = this.currentUser.email;
-                document.querySelector('.connection-status').textContent = '✅ Connected to cloud';
+                document.querySelector('.connection-status').textContent = 'Connected to cloud';
             }
 
-            // Load stats
             await this.loadStats();
-
-            // Load current site
             await this.loadCurrentSite();
-
-            // Update protection status
             await this.updateProtectionStatus();
-
         } catch (error)
         {
             console.error('Failed to load dashboard data:', error);
@@ -421,15 +390,15 @@ class FokusPopup
             const response = await this.sendMessage({ action: 'addDomainFromTab' });
             if (response && response.success)
             {
-                this.showTempMessage(`✅ Blocked: ${response.domain}`);
+                this.showTempMessage(`Blocked: ${response.domain}`);
                 await this.loadStats();
             } else
             {
-                this.showTempMessage('❌ Failed to block site');
+                this.showTempMessage('Failed to block site');
             }
         } catch (error)
         {
-            this.showTempMessage('❌ Failed to block site');
+            this.showTempMessage('Failed to block site');
         } finally
         {
             btn.textContent = originalText;
@@ -447,7 +416,7 @@ class FokusPopup
         } catch (error)
         {
             console.error('Failed to open settings:', error);
-            this.showTempMessage('❌ Failed to open settings');
+            this.showTempMessage('Failed to open settings');
         }
     }
 
@@ -455,26 +424,25 @@ class FokusPopup
     {
         if (this.isOfflineMode)
         {
-            this.showTempMessage('⚡ Sync not available in offline mode');
+            this.showTempMessage('Sync not available in offline mode');
             return;
         }
 
         const btn = document.getElementById('sync-now');
         const originalText = btn.textContent;
 
-        btn.textContent = '🔄 Syncing...';
+        btn.textContent = 'Syncing...';
         btn.disabled = true;
 
         try
         {
             await this.sendMessage({ action: 'syncToCloud' });
             await this.sendMessage({ action: 'syncFromCloud' });
-
-            this.showTempMessage('✅ Sync completed');
+            this.showTempMessage('Sync completed');
             await this.loadStats();
         } catch (error)
         {
-            this.showTempMessage('❌ Sync failed');
+            this.showTempMessage('Sync failed');
         } finally
         {
             btn.textContent = originalText;
@@ -493,7 +461,6 @@ class FokusPopup
                 await this.sendMessage({ action: 'signOut' });
             } else
             {
-                // Clear offline mode
                 await chrome.storage.local.remove(['offlineMode', 'offlineExpiry']);
             }
 
@@ -506,11 +473,10 @@ class FokusPopup
         } catch (error)
         {
             console.error('Sign out error:', error);
-            this.showTempMessage('❌ Sign out failed');
+            this.showTempMessage('Sign out failed');
         }
     }
 
-    // Utility Methods
     showMessage(element, message, type)
     {
         if (!element) return;
@@ -520,7 +486,6 @@ class FokusPopup
 
         element.innerHTML = `<div class="message ${messageClass}">${message}</div>`;
 
-        // Auto-clear messages after 5 seconds
         setTimeout(() =>
         {
             if (element.innerHTML.includes(message))
@@ -532,7 +497,6 @@ class FokusPopup
 
     showTempMessage(message)
     {
-        // Create temporary message overlay
         const overlay = document.createElement('div');
         overlay.style.cssText = `
             position: fixed;
@@ -550,7 +514,6 @@ class FokusPopup
         `;
         overlay.textContent = message;
 
-        // Add animation styles
         if (!document.getElementById('temp-message-styles'))
         {
             const style = document.createElement('style');
@@ -566,7 +529,6 @@ class FokusPopup
 
         document.body.appendChild(overlay);
 
-        // Remove after 3 seconds
         setTimeout(() =>
         {
             if (overlay.parentNode)
@@ -592,7 +554,7 @@ class FokusPopup
     showError(message)
     {
         console.error('Popup error:', message);
-        this.showTempMessage(`❌ ${message}`);
+        this.showTempMessage(message);
     }
 
     sendMessage(message)
@@ -624,11 +586,10 @@ class FokusPopup
 // Initialize popup when DOM is ready
 document.addEventListener('DOMContentLoaded', () =>
 {
-    console.log('🎯 Fokus popup DOM loaded');
+    console.log('Fokus popup DOM loaded');
 
     try
     {
-        // Check if all required elements exist
         const requiredElements = [
             'signin-tab', 'signup-tab', 'signin-form', 'signup-form',
             'signin-email', 'signin-password', 'signin-btn',
@@ -640,23 +601,20 @@ document.addEventListener('DOMContentLoaded', () =>
 
         if (missingElements.length > 0)
         {
-            console.error('❌ Missing required elements:', missingElements);
+            console.error('Missing required elements:', missingElements);
             throw new Error(`Missing elements: ${missingElements.join(', ')}`);
         }
 
-        // Initialize popup
         new FokusPopup();
-        console.log('✅ Fokus popup initialized successfully');
+        console.log('Fokus popup initialized successfully');
 
     } catch (error)
     {
-        console.error('❌ Failed to initialize popup:', error);
+        console.error('Failed to initialize popup:', error);
 
-        // Show error message to user
         document.body.innerHTML = `
             <div style="padding: 20px; color: #721c24; background: #f8d7da; border-radius: 8px; margin: 10px; font-family: Arial, sans-serif; font-size: 14px;">
                 <div style="text-align: center; margin-bottom: 15px;">
-                    <div style="font-size: 32px; margin-bottom: 10px;">⚠️</div>
                     <strong>Popup Error</strong>
                 </div>
                 <p>Failed to initialize Fokus popup. Please try:</p>

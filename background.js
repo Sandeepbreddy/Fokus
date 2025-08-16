@@ -2,7 +2,6 @@ console.log('Fokus Extension - Background Script Starting...');
 let supabaseClient = null;
 let contentBlocker = null;
 
-// Load Supabase client dynamically
 async function loadSupabaseClient()
 {
     try
@@ -16,18 +15,15 @@ async function loadSupabaseClient()
     }
 }
 
-// Initialize Supabase client if available
 async function initializeSupabase()
 {
     try
     {
         const SupabaseClientClass = await loadSupabaseClient();
-
         if (SupabaseClientClass)
         {
             supabaseClient = new SupabaseClientClass();
             const initialized = await supabaseClient.init();
-
             if (initialized)
             {
                 console.log('Supabase client initialized');
@@ -60,13 +56,11 @@ class ContentBlocker
         this.isActive = true;
         this.lastGithubUpdate = 0;
         this.githubUpdateInterval = 24 * 60 * 60 * 1000;
-
         this.init();
     }
 
     async init()
     {
-
         try
         {
             await this.loadSettings();
@@ -102,8 +96,7 @@ class ContentBlocker
         const defaultKeywords = [
             'adult', 'porn', 'xxx', 'sex', 'nude', 'naked', 'nsfw',
             'explicit', 'mature', 'erotic', 'lesbian', 'gay', 'anal',
-            'oral', 'bdsm', 'fetish', 'webcam', 'escort', 'dating', 'japanese uncensored',
-            'japanese decensored'
+            'oral', 'bdsm', 'fetish', 'webcam', 'escort', 'dating'
         ];
 
         await chrome.storage.local.set({
@@ -150,9 +143,7 @@ class ContentBlocker
         try
         {
             const urlObj = new URL(url);
-
-            if (urlObj.protocol === 'chrome-extension:' ||
-                urlObj.protocol === 'moz-extension:') return;
+            if (urlObj.protocol === 'chrome-extension:' || urlObj.protocol === 'moz-extension:') return;
 
             if (await this.isDomainBlocked(urlObj.hostname))
             {
@@ -218,7 +209,6 @@ class ContentBlocker
     async isDomainBlocked(hostname)
     {
         if (!this.isActive) return false;
-
         if (this.customDomains.has(hostname)) return true;
         if (this.blockedDomains.has(hostname)) return true;
 
@@ -226,29 +216,23 @@ class ContentBlocker
         {
             if (hostname.endsWith('.' + domain)) return true;
         }
-
         for (const domain of this.blockedDomains)
         {
             if (hostname.endsWith('.' + domain)) return true;
         }
-
         return false;
     }
 
     async containsBlockedKeywords(text)
     {
         if (!this.isActive) return false;
-
         const lowerText = text.toLowerCase();
-
         for (const keyword of this.blockedKeywords)
         {
             const lowerKeyword = keyword.toLowerCase();
-
-            // Check for partial matches using includes()
             if (lowerText.includes(lowerKeyword))
             {
-                console.log(`Blocked keyword detected: "${lowerKeyword}" in "${text}"`);
+                console.log(`Blocked keyword detected: "${lowerKeyword}"`);
                 return true;
             }
         }
@@ -261,7 +245,6 @@ class ContentBlocker
         {
             const data = await chrome.storage.local.get(['blocksToday', 'totalBlocks', 'lastBlockDate']);
             const today = new Date().toDateString();
-
             let blocksToday = data.blocksToday || 0;
             let totalBlocks = data.totalBlocks || 0;
 
@@ -285,23 +268,19 @@ class ContentBlocker
         }
     }
 
-    // API METHODS (keeping existing methods)
     async addCustomDomain(domain)
     {
         try
         {
             const data = await chrome.storage.local.get(['customDomains']);
             const domains = new Set(data.customDomains || []);
-
             if (domains.has(domain))
             {
                 return { success: false, error: 'Domain already blocked' };
             }
-
             domains.add(domain);
             await chrome.storage.local.set({ customDomains: Array.from(domains) });
             this.customDomains = domains;
-
             return { success: true };
         } catch (error)
         {
@@ -315,11 +294,9 @@ class ContentBlocker
         {
             const data = await chrome.storage.local.get(['customDomains']);
             const domains = new Set(data.customDomains || []);
-
             domains.delete(domain);
             await chrome.storage.local.set({ customDomains: Array.from(domains) });
             this.customDomains = domains;
-
             return { success: true };
         } catch (error)
         {
@@ -333,17 +310,14 @@ class ContentBlocker
         {
             const data = await chrome.storage.local.get(['blockedKeywords']);
             const keywords = new Set(data.blockedKeywords || []);
-
             const lowerKeyword = keyword.toLowerCase();
             if (keywords.has(lowerKeyword))
             {
                 return { success: false, error: 'Keyword already blocked' };
             }
-
             keywords.add(lowerKeyword);
             await chrome.storage.local.set({ blockedKeywords: Array.from(keywords) });
             this.blockedKeywords = keywords;
-
             return { success: true };
         } catch (error)
         {
@@ -357,11 +331,9 @@ class ContentBlocker
         {
             const data = await chrome.storage.local.get(['blockedKeywords']);
             const keywords = new Set(data.blockedKeywords || []);
-
             keywords.delete(keyword.toLowerCase());
             await chrome.storage.local.set({ blockedKeywords: Array.from(keywords) });
             this.blockedKeywords = keywords;
-
             return { success: true };
         } catch (error)
         {
@@ -403,15 +375,12 @@ class ContentBlocker
             {
                 return { success: false, error: 'No active tab' };
             }
-
             const url = new URL(tabInfo.url);
             const result = await this.addCustomDomain(url.hostname);
-
             if (result.success)
             {
                 result.domain = url.hostname;
             }
-
             return result;
         } catch (error)
         {
@@ -420,6 +389,7 @@ class ContentBlocker
     }
 }
 
+// Auth Functions
 async function getAuthStatus()
 {
     try
@@ -432,7 +402,6 @@ async function getAuthStatus()
             };
         }
 
-        // Check for offline mode
         const offlineData = await chrome.storage.local.get(['offlineMode', 'offlineExpiry']);
         if (offlineData.offlineMode && offlineData.offlineExpiry > Date.now())
         {
@@ -464,17 +433,14 @@ async function signIn(email, password)
     {
         if (!supabaseClient)
         {
-            console.log('No Supabase client available, enabling offline mode instead');
-
-            const duration = 24 * 60 * 60 * 1000; // 24 hours
+            console.log('No Supabase client available, enabling offline mode');
+            const duration = 24 * 60 * 60 * 1000;
             const expiry = Date.now() + duration;
-
             await chrome.storage.local.set({
                 offlineMode: true,
                 offlineExpiry: expiry,
-                offlineEmail: email // Store for display purposes
+                offlineEmail: email
             });
-
             return {
                 success: true,
                 user: { email: email },
@@ -484,10 +450,8 @@ async function signIn(email, password)
         }
 
         const result = await supabaseClient.signIn(email, password);
-
         if (result.success)
         {
-            // Sync settings after successful sign in
             try
             {
                 await supabaseClient.syncFromCloud();
@@ -496,26 +460,20 @@ async function signIn(email, password)
                 console.warn('Failed to sync after sign in:', syncError);
             }
         }
-
         return result;
     } catch (error)
     {
         console.error('Sign in failed:', error);
-        if (error.message.includes('Cloud features not available') ||
-            error.message.includes('fetch'))
+        if (error.message.includes('Cloud features not available') || error.message.includes('fetch'))
         {
-
             console.log('Cloud unavailable, falling back to offline mode');
-
-            const duration = 24 * 60 * 60 * 1000; // 24 hours
+            const duration = 24 * 60 * 60 * 1000;
             const expiry = Date.now() + duration;
-
             await chrome.storage.local.set({
                 offlineMode: true,
                 offlineExpiry: expiry,
                 offlineEmail: email
             });
-
             return {
                 success: true,
                 user: { email: email },
@@ -523,7 +481,6 @@ async function signIn(email, password)
                 message: 'Cloud sync unavailable - working in offline mode'
             };
         }
-
         throw error;
     }
 }
@@ -534,18 +491,14 @@ async function signUp(email, password)
     {
         if (!supabaseClient)
         {
-            // For sign up, we really need cloud features
-            // But we can still allow local account creation
-            const duration = 24 * 60 * 60 * 1000; // 24 hours
+            const duration = 24 * 60 * 60 * 1000;
             const expiry = Date.now() + duration;
-
             await chrome.storage.local.set({
                 offlineMode: true,
                 offlineExpiry: expiry,
                 offlineEmail: email,
                 accountCreated: new Date().toISOString()
             });
-
             return {
                 success: true,
                 user: { email: email },
@@ -553,27 +506,20 @@ async function signUp(email, password)
                 message: 'Account created locally - cloud sync will be available when connection is restored'
             };
         }
-
         return await supabaseClient.signUp(email, password);
     } catch (error)
     {
         console.error('Sign up failed:', error);
-
-        // Fallback to local account
-        if (error.message.includes('Cloud features not available') ||
-            error.message.includes('fetch'))
+        if (error.message.includes('Cloud features not available') || error.message.includes('fetch'))
         {
-
-            const duration = 24 * 60 * 60 * 1000; // 24 hours
+            const duration = 24 * 60 * 60 * 1000;
             const expiry = Date.now() + duration;
-
             await chrome.storage.local.set({
                 offlineMode: true,
                 offlineExpiry: expiry,
                 offlineEmail: email,
                 accountCreated: new Date().toISOString()
             });
-
             return {
                 success: true,
                 user: { email: email },
@@ -581,7 +527,6 @@ async function signUp(email, password)
                 message: 'Account created locally - cloud features will be available when connection is restored'
             };
         }
-
         throw error;
     }
 }
@@ -594,19 +539,13 @@ async function signOut()
         {
             await supabaseClient.signOut();
         }
-
-        // Also clear offline mode
         await chrome.storage.local.remove(['offlineMode', 'offlineExpiry', 'offlineEmail', 'accountCreated']);
-
         return { success: true };
     } catch (error)
     {
         console.error('Sign out failed:', error);
-
-        // Always clear local auth data even if cloud sign out fails
         await chrome.storage.local.remove(['offlineMode', 'offlineExpiry', 'offlineEmail', 'accountCreated']);
-
-        return { success: true }; // Always succeed locally
+        return { success: true };
     }
 }
 
@@ -618,7 +557,6 @@ async function syncToCloud()
         {
             throw new Error('Cloud sync not available - sign in required');
         }
-
         return await supabaseClient.syncToCloud();
     } catch (error)
     {
@@ -635,7 +573,6 @@ async function syncFromCloud()
         {
             throw new Error('Cloud sync not available - sign in required');
         }
-
         return await supabaseClient.syncFromCloud();
     } catch (error)
     {
@@ -649,8 +586,6 @@ async function fetchBlocklist(url)
     try
     {
         console.log('Background script fetching blocklist:', url);
-
-        // Background scripts have fewer CSP restrictions
         const response = await fetch(url, {
             method: 'GET',
             headers: {
@@ -671,7 +606,6 @@ async function fetchBlocklist(url)
         const content = await response.text();
         console.log(`Background fetch successful: ${content.length} bytes from ${url}`);
 
-        // Validate content
         if (!content || content.length < 100)
         {
             throw new Error('Invalid or empty response');
@@ -694,22 +628,17 @@ async function fetchBlocklist(url)
     }
 }
 
-// INITIALIZATION
+// Initialize
 async function initialize()
 {
     try
     {
-        // Initialize Supabase client (may fail gracefully)
         await initializeSupabase();
-
-        // Initialize content blocker (should always work)
         contentBlocker = new ContentBlocker();
         console.log('Content Blocker created successfully');
     } catch (error)
     {
         console.error('Failed to initialize:', error);
-
-        // Create minimal fallback
         contentBlocker = {
             addCustomDomain: async () => ({ success: false, error: 'Service unavailable' }),
             removeCustomDomain: async () => ({ success: false, error: 'Service unavailable' }),
@@ -722,83 +651,59 @@ async function initialize()
     }
 }
 
-// MESSAGE HANDLER - IMPROVED ERROR RESPONSES
+// Message Handler
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
 {
     console.log('Message received:', message.action);
-
     (async () =>
     {
         try
         {
             let result;
-
             switch (message.action)
             {
-                // Authentication
                 case 'getAuthStatus':
                     result = await getAuthStatus();
                     break;
-
                 case 'signIn':
                     result = await signIn(message.email, message.password);
                     break;
-
                 case 'signUp':
                     result = await signUp(message.email, message.password);
                     break;
-
                 case 'signOut':
                     result = await signOut();
                     break;
-
-                // Cloud sync
                 case 'syncToCloud':
                     result = await syncToCloud();
                     break;
-
                 case 'syncFromCloud':
                     result = await syncFromCloud();
                     break;
-
-                // Blocklist fetching
                 case 'fetchBlocklist':
                     result = await fetchBlocklist(message.url);
                     break;
-
-                // Domain management
                 case 'addCustomDomain':
                     result = await contentBlocker.addCustomDomain(message.domain);
                     break;
-
                 case 'removeCustomDomain':
                     result = await contentBlocker.removeCustomDomain(message.domain);
                     break;
-
                 case 'addDomainFromTab':
                     result = await contentBlocker.addDomainFromTab();
                     break;
-
-                // Keyword management
                 case 'addKeyword':
                     result = await contentBlocker.addKeyword(message.keyword);
                     break;
-
                 case 'removeKeyword':
                     result = await contentBlocker.removeKeyword(message.keyword);
                     break;
-
-                // Extension control
                 case 'setActive':
                     result = await contentBlocker.setActive(message.active);
                     break;
-
-                // Tab info
                 case 'getCurrentTab':
                     result = await contentBlocker.getCurrentTab();
                     break;
-
-                // Blocklist operations (simplified for now)
                 case 'addBlocklistUrl':
                 case 'removeBlocklistUrl':
                 case 'toggleBlocklistUrl':
@@ -810,7 +715,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
                         canRetry: false
                     };
                     break;
-
                 default:
                     result = {
                         success: false,
@@ -818,15 +722,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
                         canRetry: false
                     };
             }
-
             console.log('Sending response:', result);
             sendResponse(result);
-
         } catch (error)
         {
             console.error('Message handler error:', error);
-
-            // Provide helpful error information
             const errorResponse = {
                 success: false,
                 error: error.message,
@@ -834,15 +734,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
                 isCloudError: error.message.includes('Cloud features not available') || error.message.includes('fetch'),
                 suggestOfflineMode: error.message.includes('Cloud features not available')
             };
-
             sendResponse(errorResponse);
         }
     })();
-
-    return true; // Will respond asynchronously
+    return true;
 });
 
-// Start initialization
 initialize();
-
 console.log('Background script loaded successfully');

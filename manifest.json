@@ -21,47 +21,10 @@
     "content_scripts": [
         {
             "matches": [
-                "*://www.google.com/search*",
-                "*://google.com/search*"
-            ],
-            "js": [
-                "google-search-blocker.js"
-            ],
-            "run_at": "document_start"
-        },
-        {
-            "matches": [
-                "*://www.google.com/*",
-                "*://google.com/*",
-                "*://www.bing.com/*",
-                "*://bing.com/*",
-                "*://duckduckgo.com/*",
-                "*://www.duckduckgo.com/*",
-                "*://search.yahoo.com/*",
-                "*://yahoo.com/*",
-                "*://yandex.com/*",
-                "*://www.yandex.com/*",
-                "*://startpage.com/*",
-                "*://www.startpage.com/*",
-                "*://search.brave.com/*",
-                "*://ecosia.org/*",
-                "*://www.ecosia.org/*",
-                "*://qwant.com/*",
-                "*://www.qwant.com/*",
-                "*://youtube.com/*",
-                "*://www.youtube.com/*"
-            ],
-            "js": [
-                "content.js"
-            ],
-            "run_at": "document_start"
-        },
-        {
-            "matches": [
                 "*://*/*"
             ],
             "js": [
-                "domain-blocker.js"
+                "content-unified.js"
             ],
             "run_at": "document_start"
         }
@@ -83,8 +46,6 @@
                 "options.html",
                 "options.js",
                 "options-core.js",
-                "debug-test.html",
-                "debug-test.js",
                 "config.json",
                 "supabase-client.js"
             ],
