@@ -1,53 +1,134 @@
-// options-core.js - Core functionality for Fokus Extension Settings
+// options-core.js - Optimized Core functionality for Fokus Extension Settings
 
+// Virtual List for large data sets
+class VirtualList
+{
+    constructor(container, items, itemHeight = 30, renderFn)
+    {
+        this.container = container;
+        this.items = items;
+        this.itemHeight = itemHeight;
+        this.renderFn = renderFn;
+        this.visibleItems = Math.ceil(container.clientHeight / itemHeight) + 2; // Extra buffer
+        this.scrollTop = 0;
+        this.startIndex = 0;
+        this.endIndex = this.visibleItems;
+
+        this.setupContainer();
+        this.render();
+        this.setupScrollListener();
+    }
+
+    setupContainer()
+    {
+        // Create viewport and content containers
+        this.container.style.position = 'relative';
+        this.container.style.overflow = 'auto';
+
+        this.content = document.createElement('div');
+        this.content.style.position = 'relative';
+        this.content.style.height = `${this.items.length * this.itemHeight}px`;
+
+        this.viewport = document.createElement('div');
+        this.viewport.style.position = 'absolute';
+        this.viewport.style.top = '0';
+        this.viewport.style.left = '0';
+        this.viewport.style.right = '0';
+
+        this.container.innerHTML = '';
+        this.content.appendChild(this.viewport);
+        this.container.appendChild(this.content);
+    }
+
+    setupScrollListener()
+    {
+        let scrollTimeout;
+        this.container.addEventListener('scroll', () =>
+        {
+            this.scrollTop = this.container.scrollTop;
+
+            // Debounce scroll events
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() =>
+            {
+                this.updateVisibleRange();
+                this.render();
+            }, 10);
+        });
+    }
+
+    updateVisibleRange()
+    {
+        this.startIndex = Math.floor(this.scrollTop / this.itemHeight);
+        this.endIndex = Math.min(
+            this.startIndex + this.visibleItems,
+            this.items.length
+        );
+    }
+
+    render()
+    {
+        const fragment = document.createDocumentFragment();
+
+        for (let i = this.startIndex; i < this.endIndex; i++)
+        {
+            const itemEl = this.renderFn(this.items[i], i);
+            itemEl.style.position = 'absolute';
+            itemEl.style.top = `${i * this.itemHeight}px`;
+            itemEl.style.left = '0';
+            itemEl.style.right = '0';
+            itemEl.style.height = `${this.itemHeight}px`;
+            fragment.appendChild(itemEl);
+        }
+
+        this.viewport.innerHTML = '';
+        this.viewport.appendChild(fragment);
+    }
+
+    updateItems(newItems)
+    {
+        this.items = newItems;
+        this.content.style.height = `${this.items.length * this.itemHeight}px`;
+        this.updateVisibleRange();
+        this.render();
+    }
+
+    destroy()
+    {
+        this.container.innerHTML = '';
+        this.items = null;
+        this.renderFn = null;
+    }
+}
+
+// Optimized Options Manager
 class OptionsManager
 {
     constructor()
     {
         this.isInitialized = false;
         this.currentPin = null;
-        /*
-         * Top 50+ Keywords for Adult Content Blocking
-         * 
-         * Strategy: Use partial matching with root words to catch variations
-         * Examples of what gets blocked:
-         * 
-         * 'porn' blocks: japanporn, indianporn, pornhub, freeporn, pornstar
-         * 'sex' blocks: sexcam, cybersex, sexvideo, bisexual, unisex  
-         * 'masturbat' blocks: masturbation, masturbating, masturbator
-         * 'fuck' blocks: fucking, fucked, motherfucker
-         * 'escort' blocks: escorts, escorting, escortservice
-         * 
-         * This approach is more effective than exact matching and catches
-         * new variations automatically without manual updates.
-         */
-        this.defaultKeywords = [
-            // Core adult terms
-            'porn', 'sex', 'xxx', 'adult', 'nude', 'naked', 'nsfw',
-            'explicit', 'mature', 'erotic', 'hardcore', 'softcore',
+        this.virtualLists = new Map();
+        this.debounceTimers = new Map();
+        this.cache = new Map();
+        this.listeners = new Map();
 
-            // Action-based terms  
+        // Default data
+        this.defaultKeywords = [
+            'adult', 'porn', 'xxx', 'sex', 'nude', 'naked', 'nsfw',
+            'explicit', 'mature', 'erotic', 'hardcore', 'softcore',
             'fuck', 'fucking', 'fucked', 'anal', 'oral', 'blowjob',
             'handjob', 'masturbat', 'orgasm', 'climax', 'cumshot',
-
-            // Body parts
             'penis', 'vagina', 'breast', 'boob', 'tit', 'ass', 'butt',
             'cock', 'dick', 'pussy', 'clit', 'nipple',
-
-            // Fetish and BDSM
             'bdsm', 'bondage', 'fetish', 'kink', 'domination', 'submission',
             'slave', 'master', 'mistress', 'torture', 'whip',
-
-            // Adult categories and orientations
             'lesbian', 'gay', 'homo', 'bisexual', 'trans', 'shemale',
             'milf', 'teen', 'young', 'old', 'mature',
-
-            // Adult industry terms
             'escort', 'prostitut', 'hooker', 'stripper', 'webcam',
             'camgirl', 'camboy', 'livecam', 'chaturbate'
         ];
 
-        // Default blocklist sources - Back to using StevenBlack
         this.defaultBlocklists = [
             {
                 id: 'stevenblack-porn',
@@ -79,16 +160,26 @@ class OptionsManager
     async init()
     {
         console.log('Initializing Options Manager...');
+        const startTime = performance.now();
 
         try
         {
+            // Setup event listeners first
             this.setupEventListeners();
-            await this.loadAllSettings();
-            await this.initializeDefaultBlocklists();
+
+            // Load settings in parallel
+            await Promise.all([
+                this.loadAllSettings(),
+                this.initializeDefaultBlocklists()
+            ]);
+
+            // Update UI
             this.updateBrowserInfo();
 
             this.isInitialized = true;
-            console.log('Options Manager initialized successfully');
+
+            const initTime = performance.now() - startTime;
+            console.log(`Options Manager initialized in ${initTime.toFixed(2)}ms`);
         } catch (error)
         {
             console.error('Failed to initialize Options Manager:', error);
@@ -98,86 +189,205 @@ class OptionsManager
 
     setupEventListeners()
     {
-        // PIN Management
+        // Use event delegation for better performance
+        document.addEventListener('click', this.handleClick.bind(this));
+        document.addEventListener('input', this.handleInput.bind(this));
+        document.addEventListener('keypress', this.handleKeypress.bind(this));
+        document.addEventListener('change', this.handleChange.bind(this));
+
+        // Store specific handlers that need removal later
         this.setupPinEventListeners();
-
-        // Keywords Management
         this.setupKeywordsEventListeners();
-
-        // Domains Management
         this.setupDomainsEventListeners();
-
-        // Extension Status
-        this.setupStatusEventListeners();
-
-        // Advanced Settings
-        this.setupAdvancedEventListeners();
-
-        // Blocklist Management
         this.setupBlocklistEventListeners();
+        this.setupAdvancedEventListeners();
     }
 
-    // PIN MANAGEMENT WITH VALIDATION
+    handleClick(e)
+    {
+        const target = e.target;
+        const action = target.dataset.action || target.id;
+
+        switch (action)
+        {
+            case 'change-pin':
+                this.changePIN();
+                break;
+            case 'reset-to-default':
+                this.resetPinToDefault();
+                break;
+            case 'add-keyword':
+                this.addKeyword();
+                break;
+            case 'reset-keywords':
+                this.resetKeywords();
+                break;
+            case 'clear-keywords':
+                this.clearKeywords();
+                break;
+            case 'add-domain':
+                this.addDomain();
+                break;
+            case 'clear-domains':
+                this.clearDomains();
+                break;
+            case 'force-update':
+                this.forceUpdateBlocklists();
+                break;
+            case 'view-blocked-count':
+                this.viewBlockedCount();
+                break;
+            case 'test-blocking':
+                this.testBlocking();
+                break;
+            case 'view-logs':
+                this.viewLogs();
+                break;
+            case 'export-settings':
+                this.exportSettings();
+                break;
+            case 'import-btn':
+                this.importSettings();
+                break;
+            case 'reset-all':
+                this.resetAllSettings();
+                break;
+        }
+
+        // Handle remove actions
+        if (target.classList.contains('remove-keyword'))
+        {
+            const keyword = target.closest('.keyword-tag').dataset.keyword;
+            this.removeKeyword(keyword);
+        } else if (target.classList.contains('remove-domain'))
+        {
+            const domain = target.closest('.list-item').dataset.domain;
+            this.removeDomain(domain);
+        }
+    }
+
+    handleInput(e)
+    {
+        const target = e.target;
+        const id = target.id;
+
+        // Debounce input validation
+        this.debounce(() =>
+        {
+            switch (id)
+            {
+                case 'current-pin':
+                case 'new-pin':
+                case 'confirm-pin':
+                    this.validatePinForm();
+                    break;
+                case 'new-keyword':
+                    this.validateKeywordInput();
+                    break;
+                case 'new-domain':
+                    this.validateDomainInput();
+                    break;
+            }
+        }, 150)();
+    }
+
+    handleKeypress(e)
+    {
+        if (e.key !== 'Enter') return;
+
+        const target = e.target;
+        const id = target.id;
+
+        switch (id)
+        {
+            case 'confirm-pin':
+                if (!document.getElementById('change-pin').disabled)
+                {
+                    this.changePIN();
+                }
+                break;
+            case 'new-keyword':
+                if (!document.getElementById('add-keyword').disabled)
+                {
+                    this.addKeyword();
+                }
+                break;
+            case 'new-domain':
+                if (!document.getElementById('add-domain').disabled)
+                {
+                    this.addDomain();
+                }
+                break;
+        }
+    }
+
+    handleChange(e)
+    {
+        const target = e.target;
+
+        if (target.classList.contains('blocklist-toggle'))
+        {
+            const sourceId = target.closest('.blocklist-item').dataset.sourceId;
+            this.toggleBlocklistSource(sourceId, target.checked);
+        } else if (target.id === 'import-file')
+        {
+            this.handleImportFile(e);
+        }
+    }
+
+    // PIN MANAGEMENT
     setupPinEventListeners()
     {
         const changeButton = document.getElementById('change-pin');
-        const currentPinInput = document.getElementById('current-pin');
-        const newPinInput = document.getElementById('new-pin');
-        const confirmPinInput = document.getElementById('confirm-pin');
-
-        // Initially disable button
         if (changeButton) changeButton.disabled = true;
+    }
 
-        // Real-time validation
-        const validatePinForm = () =>
+    validatePinForm()
+    {
+        const currentPin = document.getElementById('current-pin')?.value || '';
+        const newPin = document.getElementById('new-pin')?.value || '';
+        const confirmPin = document.getElementById('confirm-pin')?.value || '';
+        const changeButton = document.getElementById('change-pin');
+
+        const isValid = currentPin.length >= 4 &&
+            newPin.length >= 4 &&
+            confirmPin.length >= 4 &&
+            /^\d+$/.test(newPin) &&
+            newPin === confirmPin;
+
+        if (changeButton)
         {
-            const currentPin = currentPinInput?.value || '';
-            const newPin = newPinInput?.value || '';
-            const confirmPin = confirmPinInput?.value || '';
-
-            const isValid = currentPin.length >= 4 &&
-                newPin.length >= 4 &&
-                confirmPin.length >= 4 &&
-                /^\d+$/.test(newPin) &&
-                newPin === confirmPin;
-
-            if (changeButton)
+            changeButton.disabled = !isValid;
+            if (!isValid)
             {
-                changeButton.disabled = !isValid;
-                if (!isValid)
-                {
-                    if (currentPin.length < 4) changeButton.textContent = 'ENTER CURRENT PIN';
-                    else if (newPin.length < 4) changeButton.textContent = 'ENTER NEW PIN';
-                    else if (confirmPin.length < 4) changeButton.textContent = 'CONFIRM PIN';
-                    else if (!/^\d+$/.test(newPin)) changeButton.textContent = 'NUMBERS ONLY';
-                    else if (newPin !== confirmPin) changeButton.textContent = 'PINS DON\'T MATCH';
-                    else changeButton.textContent = 'ENTER ALL FIELDS';
-                } else
-                {
-                    changeButton.textContent = 'CHANGE PIN';
-                }
+                if (currentPin.length < 4) changeButton.textContent = 'ENTER CURRENT PIN';
+                else if (newPin.length < 4) changeButton.textContent = 'ENTER NEW PIN';
+                else if (confirmPin.length < 4) changeButton.textContent = 'CONFIRM PIN';
+                else if (!/^\d+$/.test(newPin)) changeButton.textContent = 'NUMBERS ONLY';
+                else if (newPin !== confirmPin) changeButton.textContent = 'PINS DON\'T MATCH';
+                else changeButton.textContent = 'ENTER ALL FIELDS';
+            } else
+            {
+                changeButton.textContent = 'CHANGE PIN';
             }
-        };
-
-        currentPinInput?.addEventListener('input', validatePinForm);
-        newPinInput?.addEventListener('input', validatePinForm);
-        confirmPinInput?.addEventListener('input', validatePinForm);
-
-        changeButton?.addEventListener('click', () => this.changePIN());
-        document.getElementById('reset-to-default')?.addEventListener('click', () => this.resetPinToDefault());
-
-        confirmPinInput?.addEventListener('keypress', (e) =>
-        {
-            if (e.key === 'Enter' && !changeButton.disabled) this.changePIN();
-        });
+        }
     }
 
     async loadCurrentPin()
     {
         try
         {
+            // Check cache first
+            const cached = this.cache.get('pin');
+            if (cached)
+            {
+                this.currentPin = cached;
+                return;
+            }
+
             const data = await chrome.storage.local.get(['pin']);
             this.currentPin = data.pin || '1234';
+            this.cache.set('pin', this.currentPin);
         } catch (error)
         {
             console.error('Failed to load current PIN:', error);
@@ -197,19 +407,12 @@ class OptionsManager
 
         messageEl.innerHTML = '';
 
-        // Validation is now handled by button state, but double-check
-        if (!currentPin || !newPin || !confirmPin)
-        {
-            return; // Button should be disabled
-        }
-
         if (currentPin !== this.currentPin)
         {
             this.showMessage(messageEl, 'Current PIN is incorrect.', 'error');
             return;
         }
 
-        // Disable button during operation
         if (changeButton)
         {
             changeButton.disabled = true;
@@ -220,6 +423,7 @@ class OptionsManager
         {
             await chrome.storage.local.set({ pin: newPin });
             this.currentPin = newPin;
+            this.cache.set('pin', newPin);
 
             this.showMessage(messageEl, 'PIN changed successfully!', 'success');
 
@@ -235,10 +439,9 @@ class OptionsManager
             this.showMessage(messageEl, 'Failed to change PIN. Please try again.', 'error');
         } finally
         {
-            // Re-enable validation
             if (changeButton)
             {
-                changeButton.disabled = true; // Will be re-enabled by input events
+                changeButton.disabled = true;
                 changeButton.textContent = 'ENTER ALL FIELDS';
             }
         }
@@ -252,6 +455,7 @@ class OptionsManager
         {
             await chrome.storage.local.set({ pin: '1234' });
             this.currentPin = '1234';
+            this.cache.set('pin', '1234');
 
             const messageEl = document.getElementById('pin-message');
             if (messageEl)
@@ -269,33 +473,23 @@ class OptionsManager
         }
     }
 
-    // KEYWORDS MANAGEMENT - TAG DISPLAY WITH VALIDATION
+    // KEYWORDS MANAGEMENT
     setupKeywordsEventListeners()
     {
         const addButton = document.getElementById('add-keyword');
-        const keywordInput = document.getElementById('new-keyword');
-
-        // Initially disable button
         if (addButton) addButton.disabled = true;
+    }
 
-        // Real-time validation
-        keywordInput?.addEventListener('input', (e) =>
-        {
-            const value = e.target.value.trim();
-            if (addButton)
-            {
-                addButton.disabled = value.length < 2;
-                addButton.textContent = value.length < 2 ? 'ENTER KEYWORD' : 'ADD KEYWORD';
-            }
-        });
+    validateKeywordInput()
+    {
+        const keywordInput = document.getElementById('new-keyword');
+        const addButton = document.getElementById('add-keyword');
 
-        addButton?.addEventListener('click', () => this.addKeyword());
-        keywordInput?.addEventListener('keypress', (e) =>
-        {
-            if (e.key === 'Enter' && !addButton.disabled) this.addKeyword();
-        });
-        document.getElementById('reset-keywords')?.addEventListener('click', () => this.resetKeywords());
-        document.getElementById('clear-keywords')?.addEventListener('click', () => this.clearKeywords());
+        if (!keywordInput || !addButton) return;
+
+        const value = keywordInput.value.trim();
+        addButton.disabled = value.length < 2;
+        addButton.textContent = value.length < 2 ? 'ENTER KEYWORD' : 'ADD KEYWORD';
     }
 
     async loadKeywords()
@@ -314,7 +508,14 @@ class OptionsManager
                 await chrome.storage.local.set({ blockedKeywords: keywords });
             }
 
-            this.renderKeywordsTags(keywords);
+            // Use virtual scrolling for large keyword lists
+            if (keywords.length > 100)
+            {
+                this.renderKeywordsVirtual(keywords);
+            } else
+            {
+                this.renderKeywordsTags(keywords);
+            }
 
         } catch (error)
         {
@@ -332,6 +533,36 @@ class OptionsManager
         }
     }
 
+    renderKeywordsVirtual(keywords)
+    {
+        const container = document.getElementById('keywords-container');
+        if (!container) return;
+
+        // Destroy existing virtual list if any
+        const existing = this.virtualLists.get('keywords');
+        if (existing) existing.destroy();
+
+        // Create virtual list
+        const virtualList = new VirtualList(
+            container,
+            keywords,
+            35, // item height
+            (keyword, index) =>
+            {
+                const div = document.createElement('div');
+                div.className = 'keyword-tag';
+                div.dataset.keyword = this.escapeHtml(keyword);
+                div.innerHTML = `
+                    <span class="keyword-text">${this.escapeHtml(keyword)}</span>
+                    <button class="remove-keyword" title="Remove keyword">×</button>
+                `;
+                return div;
+            }
+        );
+
+        this.virtualLists.set('keywords', virtualList);
+    }
+
     renderKeywordsTags(keywords)
     {
         const container = document.getElementById('keywords-container');
@@ -347,26 +578,26 @@ class OptionsManager
             return;
         }
 
-        const tagsHtml = keywords.map(keyword => `
-            <div class="keyword-tag" data-keyword="${this.escapeHtml(keyword)}">
-                <span class="keyword-text">${this.escapeHtml(keyword)}</span>
-                <button class="remove-keyword" title="Remove keyword">
-                    ×
-                </button>
-            </div>
-        `).join('');
+        // Use document fragment for better performance
+        const fragment = document.createDocumentFragment();
+        const wrapper = document.createElement('div');
+        wrapper.className = 'keywords-tags';
 
-        container.innerHTML = `<div class="keywords-tags">${tagsHtml}</div>`;
-
-        // Add event listeners for remove buttons
-        container.querySelectorAll('.remove-keyword').forEach(button =>
+        keywords.forEach(keyword =>
         {
-            button.addEventListener('click', (e) =>
-            {
-                const keyword = e.target.closest('.keyword-tag').dataset.keyword;
-                this.removeKeyword(keyword);
-            });
+            const tag = document.createElement('div');
+            tag.className = 'keyword-tag';
+            tag.dataset.keyword = this.escapeHtml(keyword);
+            tag.innerHTML = `
+                <span class="keyword-text">${this.escapeHtml(keyword)}</span>
+                <button class="remove-keyword" title="Remove keyword">×</button>
+            `;
+            wrapper.appendChild(tag);
         });
+
+        fragment.appendChild(wrapper);
+        container.innerHTML = '';
+        container.appendChild(fragment);
     }
 
     async addKeyword()
@@ -377,13 +608,8 @@ class OptionsManager
 
         const keyword = input.value.trim().toLowerCase();
 
-        // Validation is now handled by button state, but double-check
-        if (!keyword || keyword.length < 2)
-        {
-            return; // Button should be disabled, so this shouldn't happen
-        }
+        if (!keyword || keyword.length < 2) return;
 
-        // Disable button during operation
         if (addButton)
         {
             addButton.disabled = true;
@@ -426,10 +652,9 @@ class OptionsManager
             this.showError('Failed to add keyword. Please try again.');
         } finally
         {
-            // Re-enable button and reset text
             if (addButton)
             {
-                addButton.disabled = true; // Will be re-enabled by input event
+                addButton.disabled = true;
                 addButton.textContent = 'ENTER KEYWORD';
             }
         }
@@ -493,36 +718,26 @@ class OptionsManager
         }
     }
 
-    // DOMAINS MANAGEMENT WITH VALIDATION
+    // DOMAINS MANAGEMENT
     setupDomainsEventListeners()
     {
         const addButton = document.getElementById('add-domain');
-        const domainInput = document.getElementById('new-domain');
-
-        // Initially disable button
         if (addButton) addButton.disabled = true;
+    }
 
-        // Real-time validation
-        domainInput?.addEventListener('input', (e) =>
-        {
-            let value = e.target.value.trim().toLowerCase();
-            // Clean the input
-            value = value.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+    validateDomainInput()
+    {
+        const domainInput = document.getElementById('new-domain');
+        const addButton = document.getElementById('add-domain');
 
-            const isValid = value.length > 3 && this.isValidDomain(value);
-            if (addButton)
-            {
-                addButton.disabled = !isValid;
-                addButton.textContent = !isValid ? 'ENTER DOMAIN' : 'ADD DOMAIN';
-            }
-        });
+        if (!domainInput || !addButton) return;
 
-        addButton?.addEventListener('click', () => this.addDomain());
-        domainInput?.addEventListener('keypress', (e) =>
-        {
-            if (e.key === 'Enter' && !addButton.disabled) this.addDomain();
-        });
-        document.getElementById('clear-domains')?.addEventListener('click', () => this.clearDomains());
+        let value = domainInput.value.trim().toLowerCase();
+        value = value.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+
+        const isValid = value.length > 3 && this.isValidDomain(value);
+        addButton.disabled = !isValid;
+        addButton.textContent = !isValid ? 'ENTER DOMAIN' : 'ADD DOMAIN';
     }
 
     async loadDomains()
@@ -531,11 +746,49 @@ class OptionsManager
         {
             const data = await chrome.storage.local.get(['customDomains']);
             const domains = data.customDomains || [];
-            this.renderDomainsList(domains);
+
+            // Use virtual scrolling for large domain lists
+            if (domains.length > 100)
+            {
+                this.renderDomainsVirtual(domains);
+            } else
+            {
+                this.renderDomainsList(domains);
+            }
         } catch (error)
         {
             this.showError('Failed to load domains');
         }
+    }
+
+    renderDomainsVirtual(domains)
+    {
+        const container = document.getElementById('domains-list');
+        if (!container) return;
+
+        // Destroy existing virtual list if any
+        const existing = this.virtualLists.get('domains');
+        if (existing) existing.destroy();
+
+        // Create virtual list
+        const virtualList = new VirtualList(
+            container,
+            domains,
+            40, // item height
+            (domain, index) =>
+            {
+                const div = document.createElement('div');
+                div.className = 'list-item';
+                div.dataset.domain = this.escapeHtml(domain);
+                div.innerHTML = `
+                    <span>${this.escapeHtml(domain)}</span>
+                    <button class="btn btn-sm btn-danger remove-domain">DELETE</button>
+                `;
+                return div;
+            }
+        );
+
+        this.virtualLists.set('domains', virtualList);
     }
 
     renderDomainsList(domains)
@@ -549,24 +802,23 @@ class OptionsManager
             return;
         }
 
-        container.innerHTML = domains.map(domain => `
-            <div class="list-item" data-domain="${this.escapeHtml(domain)}">
-                <span>${this.escapeHtml(domain)}</span>
-                <button class="btn btn-sm btn-danger remove-domain">
-                    DELETE
-                </button>
-            </div>
-        `).join('');
+        // Use document fragment for better performance
+        const fragment = document.createDocumentFragment();
 
-        // Add event listeners for remove buttons
-        container.querySelectorAll('.remove-domain').forEach(button =>
+        domains.forEach(domain =>
         {
-            button.addEventListener('click', (e) =>
-            {
-                const domain = e.target.closest('.list-item').dataset.domain;
-                this.removeDomain(domain);
-            });
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            item.dataset.domain = this.escapeHtml(domain);
+            item.innerHTML = `
+                <span>${this.escapeHtml(domain)}</span>
+                <button class="btn btn-sm btn-danger remove-domain">DELETE</button>
+            `;
+            fragment.appendChild(item);
         });
+
+        container.innerHTML = '';
+        container.appendChild(fragment);
     }
 
     async addDomain()
@@ -578,13 +830,8 @@ class OptionsManager
         let domain = input.value.trim().toLowerCase();
         domain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
 
-        // Validation is now handled by button state
-        if (!domain || !this.isValidDomain(domain))
-        {
-            return; // Button should be disabled
-        }
+        if (!domain || !this.isValidDomain(domain)) return;
 
-        // Disable button during operation
         if (addButton)
         {
             addButton.disabled = true;
@@ -609,10 +856,9 @@ class OptionsManager
             this.showError('Failed to add domain.');
         } finally
         {
-            // Re-enable button and reset text
             if (addButton)
             {
-                addButton.disabled = true; // Will be re-enabled by input event
+                addButton.disabled = true;
                 addButton.textContent = 'ENTER DOMAIN';
             }
         }
@@ -659,8 +905,7 @@ class OptionsManager
     // BLOCKLIST MANAGEMENT
     setupBlocklistEventListeners()
     {
-        document.getElementById('force-update')?.addEventListener('click', () => this.forceUpdateBlocklists());
-        document.getElementById('view-blocked-count')?.addEventListener('click', () => this.viewBlockedCount());
+        // Event listeners handled by delegation
     }
 
     async initializeDefaultBlocklists()
@@ -714,7 +959,10 @@ class OptionsManager
             return;
         }
 
-        container.innerHTML = sources.map(source =>
+        // Use document fragment for better performance
+        const fragment = document.createDocumentFragment();
+
+        sources.forEach(source =>
         {
             const result = results.find(r => r.id === source.id) || {};
             const isActive = source.enabled && result.success;
@@ -722,46 +970,41 @@ class OptionsManager
             const lastUpdated = result.lastUpdated ?
                 new Date(result.lastUpdated).toLocaleDateString() : 'Never';
 
-            return `
-                <div class="blocklist-item" data-source-id="${source.id}">
-                    <div class="blocklist-header">
-                        <div class="blocklist-name">${this.escapeHtml(source.name)}</div>
-                        <div class="blocklist-status">
-                            <span class="status-badge ${isActive ? 'active' : 'inactive'}">
-                                ${isActive ? 'ACTIVE' : (source.enabled ? 'FAILED' : 'DISABLED')}
-                            </span>
-                            ${isActive ? `<span>${domainCount.toLocaleString()} domains</span>` : ''}
-                        </div>
+            const item = document.createElement('div');
+            item.className = 'blocklist-item';
+            item.dataset.sourceId = source.id;
+            item.innerHTML = `
+                <div class="blocklist-header">
+                    <div class="blocklist-name">${this.escapeHtml(source.name)}</div>
+                    <div class="blocklist-status">
+                        <span class="status-badge ${isActive ? 'active' : 'inactive'}">
+                            ${isActive ? 'ACTIVE' : (source.enabled ? 'FAILED' : 'DISABLED')}
+                        </span>
+                        ${isActive ? `<span>${domainCount.toLocaleString()} domains</span>` : ''}
                     </div>
-                    
-                    <div class="blocklist-info">
-                        ${this.escapeHtml(source.description || 'Community blocklist')}
-                    </div>
-                    
-                    <div class="blocklist-url">${this.escapeHtml(source.url)}</div>
-                    
-                    <div class="blocklist-actions">
-                        <label style="display: flex; align-items: center; gap: 5px; font-size: 13px;">
-                            <input type="checkbox" class="blocklist-toggle" ${source.enabled ? 'checked' : ''}>
-                            Enable
-                        </label>
-                        <span style="font-size: 12px; color: #666;">Last updated: ${lastUpdated}</span>
-                    </div>
-                    
-                    ${result.error ? `<div style="color: #d32f2f; font-size: 12px; margin-top: 8px;">Error: ${this.escapeHtml(result.error)}</div>` : ''}
                 </div>
+                
+                <div class="blocklist-info">
+                    ${this.escapeHtml(source.description || 'Community blocklist')}
+                </div>
+                
+                <div class="blocklist-url">${this.escapeHtml(source.url)}</div>
+                
+                <div class="blocklist-actions">
+                    <label style="display: flex; align-items: center; gap: 5px; font-size: 13px;">
+                        <input type="checkbox" class="blocklist-toggle" ${source.enabled ? 'checked' : ''}>
+                        Enable
+                    </label>
+                    <span style="font-size: 12px; color: #666;">Last updated: ${lastUpdated}</span>
+                </div>
+                
+                ${result.error ? `<div style="color: #d32f2f; font-size: 12px; margin-top: 8px;">Error: ${this.escapeHtml(result.error)}</div>` : ''}
             `;
-        }).join('');
-
-        // Add event listeners for toggles
-        container.querySelectorAll('.blocklist-toggle').forEach(toggle =>
-        {
-            toggle.addEventListener('change', (e) =>
-            {
-                const sourceId = e.target.closest('.blocklist-item').dataset.sourceId;
-                this.toggleBlocklistSource(sourceId, e.target.checked);
-            });
+            fragment.appendChild(item);
         });
+
+        container.innerHTML = '';
+        container.appendChild(fragment);
     }
 
     async toggleBlocklistSource(id, enabled)
@@ -807,58 +1050,61 @@ class OptionsManager
 
             console.log('Starting blocklist update for', sources.length, 'sources');
 
-            for (const source of sources.filter(s => s.enabled))
+            // Process sources in parallel with limit
+            const enabledSources = sources.filter(s => s.enabled);
+            const chunks = this.chunkArray(enabledSources, 2); // Process 2 at a time
+
+            for (const chunk of chunks)
             {
-                try
-                {
-                    console.log(`Fetching blocklist: ${source.name} from ${source.url}`);
-
-                    // Always use background script for GitHub URLs
-                    console.log('Using background script to fetch blocklist...');
-
-                    const bgResponse = await this.sendMessage({
-                        action: 'fetchBlocklist',
-                        url: source.url
-                    });
-
-                    if (!bgResponse || !bgResponse.success)
+                const chunkResults = await Promise.all(
+                    chunk.map(async source =>
                     {
-                        throw new Error(bgResponse?.error || 'Background fetch failed');
-                    }
+                        try
+                        {
+                            console.log(`Fetching blocklist: ${source.name}`);
 
-                    const content = bgResponse.content;
-                    console.log(`Fetched ${content.length} bytes from ${source.name}`);
+                            const bgResponse = await this.sendMessage({
+                                action: 'fetchBlocklist',
+                                url: source.url
+                            });
 
-                    const domains = this.parseHostsFile(content);
+                            if (!bgResponse || !bgResponse.success)
+                            {
+                                throw new Error(bgResponse?.error || 'Background fetch failed');
+                            }
 
-                    if (domains.length === 0)
-                    {
-                        throw new Error('No valid domains found in hosts file');
-                    }
+                            const content = bgResponse.content;
+                            console.log(`Fetched ${content.length} bytes from ${source.name}`);
 
-                    results.push({
-                        id: source.id,
-                        success: true,
-                        domainCount: domains.length,
-                        lastUpdated: new Date().toISOString(),
-                        domains: domains
-                    });
+                            const domains = this.parseHostsFile(content);
 
-                    totalDomains += domains.length;
-                    console.log(`✅ ${source.name}: ${domains.length} domains loaded`);
+                            if (domains.length === 0)
+                            {
+                                throw new Error('No valid domains found in hosts file');
+                            }
 
-                } catch (error)
-                {
-                    console.error(`❌ Failed to update ${source.name}:`, error);
+                            return {
+                                id: source.id,
+                                success: true,
+                                domainCount: domains.length,
+                                lastUpdated: new Date().toISOString(),
+                                domains: domains
+                            };
+                        } catch (error)
+                        {
+                            console.error(`Failed to update ${source.name}:`, error);
+                            return {
+                                id: source.id,
+                                success: false,
+                                error: error.message,
+                                lastUpdated: new Date().toISOString(),
+                                domains: []
+                            };
+                        }
+                    })
+                );
 
-                    results.push({
-                        id: source.id,
-                        success: false,
-                        error: error.message,
-                        lastUpdated: new Date().toISOString(),
-                        domains: []
-                    });
-                }
+                results.push(...chunkResults);
             }
 
             // Combine all domains from successful sources
@@ -931,13 +1177,13 @@ class OptionsManager
                 continue;
             }
 
-            // Parse hosts file format: "0.0.0.0 domain.com" or "127.0.0.1 domain.com"
+            // Parse hosts file format
             const parts = trimmed.split(/\s+/);
             if (parts.length >= 2)
             {
                 const domain = parts[1].toLowerCase();
 
-                // Basic domain validation - more permissive
+                // Basic domain validation
                 if (domain.includes('.') &&
                     !domain.startsWith('.') &&
                     !domain.includes('/') &&
@@ -1013,12 +1259,6 @@ class OptionsManager
     }
 
     // EXTENSION STATUS
-    setupStatusEventListeners()
-    {
-        document.getElementById('test-blocking')?.addEventListener('click', () => this.testBlocking());
-        document.getElementById('view-logs')?.addEventListener('click', () => this.viewLogs());
-    }
-
     async testBlocking()
     {
         const debugUrl = chrome.runtime.getURL('debug-test.html');
@@ -1031,7 +1271,7 @@ class OptionsManager
         {
             const data = await chrome.storage.local.get([
                 'blocksToday', 'focusStreak', 'totalBlocks', 'lastBlockDate',
-                'lastImportDate', 'lastResetDate', 'lastBlocklistUpdate'
+                'lastImportDate', 'lastResetDate', 'lastBlocklistUpdate', 'errorLog'
             ]);
 
             let logText = 'Fokus Extension Activity Log\n';
@@ -1060,6 +1300,15 @@ class OptionsManager
                 logText += `- Last Settings Reset: ${new Date(data.lastResetDate).toLocaleString()}\n`;
             }
 
+            if (data.errorLog && data.errorLog.length > 0)
+            {
+                logText += `\nRecent Errors (last ${data.errorLog.length}):\n`;
+                data.errorLog.forEach(error =>
+                {
+                    logText += `- [${error.timestamp}] ${error.context}: ${error.message}\n`;
+                });
+            }
+
             logText += `\nGenerated: ${new Date().toLocaleString()}\n`;
 
             const blob = new Blob([logText], { type: 'text/plain' });
@@ -1084,11 +1333,7 @@ class OptionsManager
     // ADVANCED SETTINGS
     setupAdvancedEventListeners()
     {
-        // Backup & Restore
-        document.getElementById('export-settings')?.addEventListener('click', () => this.exportSettings());
-        document.getElementById('import-btn')?.addEventListener('click', () => this.importSettings());
-        document.getElementById('reset-all')?.addEventListener('click', () => this.resetAllSettings());
-        document.getElementById('import-file')?.addEventListener('change', (e) => this.handleImportFile(e));
+        // Event listeners handled by delegation
     }
 
     // BACKUP & RESTORE
@@ -1181,6 +1426,10 @@ class OptionsManager
             }
 
             await chrome.storage.local.set(settingsToImport);
+
+            // Clear cache
+            this.cache.clear();
+
             await this.loadAllSettings();
 
             this.showMessage(messageEl, 'Settings imported successfully!', 'success');
@@ -1224,6 +1473,9 @@ class OptionsManager
                 lastResetDate: new Date().toISOString()
             });
 
+            // Clear cache
+            this.cache.clear();
+
             await this.loadAllSettings();
             this.showSuccess('All settings reset to defaults!');
 
@@ -1232,39 +1484,22 @@ class OptionsManager
             this.showError(`Failed to reset settings: ${error.message}`);
         }
     }
-    // Helper method for keyword matching (used in content scripts too)
-    containsBlockedKeywords(text)
-    {
-        if (!text || typeof text !== 'string') return false;
 
-        const lowerText = text.toLowerCase();
-
-        for (const keyword of this.blockedKeywords)
-        {
-            const lowerKeyword = keyword.toLowerCase();
-
-            // Partial matching - catches variations like:
-            // 'porn' → 'japanporn', 'pornhub', 'freeporn'
-            // 'sex' → 'sexcam', 'cybersex', 'sexvideo' 
-            // 'masturbat' → 'masturbation', 'masturbating'
-            if (lowerText.includes(lowerKeyword))
-            {
-                return { found: true, keyword: lowerKeyword, originalText: text };
-            }
-        }
-        return { found: false };
-    }
+    // HELPER METHODS
     async loadAllSettings()
     {
         console.log('Loading all settings...');
 
         try
         {
-            await this.loadCurrentPin();
-            await this.loadStats();
-            await this.loadKeywords();
-            await this.loadDomains();
-            await this.loadBlocklistSources();
+            // Load in parallel for better performance
+            await Promise.all([
+                this.loadCurrentPin(),
+                this.loadStats(),
+                this.loadKeywords(),
+                this.loadDomains(),
+                this.loadBlocklistSources()
+            ]);
 
             console.log('All settings loaded successfully');
         } catch (error)
@@ -1281,36 +1516,40 @@ class OptionsManager
                 'blocksToday', 'focusStreak', 'totalBlocks', 'customDomains', 'blockedKeywords', 'blockedDomains'
             ]);
 
-            const elements = {
-                totalBlocks: document.getElementById('total-blocks'),
-                domainsBlocked: document.getElementById('domains-blocked'),
-                keywordsBlocked: document.getElementById('keywords-blocked'),
-                timeSaved: document.getElementById('time-saved')
-            };
-
-            if (elements.totalBlocks)
+            // Update UI in animation frame
+            requestAnimationFrame(() =>
             {
-                elements.totalBlocks.textContent = (data.totalBlocks || 0).toLocaleString();
-            }
+                const elements = {
+                    totalBlocks: document.getElementById('total-blocks'),
+                    domainsBlocked: document.getElementById('domains-blocked'),
+                    keywordsBlocked: document.getElementById('keywords-blocked'),
+                    timeSaved: document.getElementById('time-saved')
+                };
 
-            if (elements.domainsBlocked)
-            {
-                const customDomains = (data.customDomains || []).length;
-                const githubDomains = (data.blockedDomains || []).length;
-                elements.domainsBlocked.textContent = (customDomains + githubDomains).toLocaleString();
-            }
+                if (elements.totalBlocks)
+                {
+                    elements.totalBlocks.textContent = (data.totalBlocks || 0).toLocaleString();
+                }
 
-            if (elements.keywordsBlocked)
-            {
-                elements.keywordsBlocked.textContent = (data.blockedKeywords || []).length.toLocaleString();
-            }
+                if (elements.domainsBlocked)
+                {
+                    const customDomains = (data.customDomains || []).length;
+                    const githubDomains = (data.blockedDomains || []).length;
+                    elements.domainsBlocked.textContent = (customDomains + githubDomains).toLocaleString();
+                }
 
-            if (elements.timeSaved)
-            {
-                const estimatedMinutes = (data.totalBlocks || 0) * 2;
-                const hours = Math.floor(estimatedMinutes / 60);
-                elements.timeSaved.textContent = hours > 0 ? `${hours}h` : `${estimatedMinutes}m`;
-            }
+                if (elements.keywordsBlocked)
+                {
+                    elements.keywordsBlocked.textContent = (data.blockedKeywords || []).length.toLocaleString();
+                }
+
+                if (elements.timeSaved)
+                {
+                    const estimatedMinutes = (data.totalBlocks || 0) * 2;
+                    const hours = Math.floor(estimatedMinutes / 60);
+                    elements.timeSaved.textContent = hours > 0 ? `${hours}h` : `${estimatedMinutes}m`;
+                }
+            });
 
         } catch (error)
         {
@@ -1335,7 +1574,7 @@ class OptionsManager
         }
     }
 
-    // HELPER METHODS
+    // Message handling
     showMessage(element, message, type)
     {
         if (!element) return;
@@ -1343,7 +1582,10 @@ class OptionsManager
         const messageClass = type === 'success' ? 'success-message' :
             type === 'info' ? 'info-message' : 'error-message';
 
-        element.innerHTML = `<div class="${messageClass}">${message}</div>`;
+        requestAnimationFrame(() =>
+        {
+            element.innerHTML = `<div class="${messageClass}">${message}</div>`;
+        });
 
         setTimeout(() =>
         {
@@ -1368,12 +1610,14 @@ class OptionsManager
 
     showGlobalMessage(message, type)
     {
-        // Create simple toast notification
+        // Remove existing toast if any
+        const existing = document.querySelector('.toast-notification');
+        if (existing) existing.remove();
+
         const toast = document.createElement('div');
         toast.className = `toast-notification ${type === 'success' ? 'toast-success' : 'toast-error'}`;
         toast.textContent = message;
 
-        // Style the toast
         const baseStyles = `
             position: fixed;
             top: 20px;
@@ -1450,6 +1694,7 @@ class OptionsManager
         }, 5000);
     }
 
+    // Optimized message sending with queue
     sendMessage(message)
     {
         return new Promise((resolve, reject) =>
@@ -1475,16 +1720,82 @@ class OptionsManager
         });
     }
 
+    // Utility functions
     escapeHtml(text)
     {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;',
+            '/': '&#x2F;',
+            '`': '&#x60;',
+            '=': '&#x3D;'
+        };
+        return String(text).replace(/[&<>"'`=\/]/g, s => map[s]);
     }
 
     isValidDomain(domain)
     {
-        const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/;
-        return domainRegex.test(domain) && domain.includes('.');
+        const pattern = /^(?!-)(?:[a-zA-Z0-9-]{1,63}(?<!-)\.)*[a-zA-Z]{2,}$/;
+        return pattern.test(domain) && domain.length <= 253;
+    }
+
+    debounce(func, wait)
+    {
+        const key = func.toString();
+        return (...args) =>
+        {
+            clearTimeout(this.debounceTimers.get(key));
+            const timeout = setTimeout(() =>
+            {
+                this.debounceTimers.delete(key);
+                func.apply(this, args);
+            }, wait);
+            this.debounceTimers.set(key, timeout);
+        };
+    }
+
+    chunkArray(array, size)
+    {
+        const chunks = [];
+        for (let i = 0; i < array.length; i += size)
+        {
+            chunks.push(array.slice(i, i + size));
+        }
+        return chunks;
+    }
+
+    // Cleanup method to prevent memory leaks
+    destroy()
+    {
+        // Clear all virtual lists
+        for (const virtualList of this.virtualLists.values())
+        {
+            virtualList.destroy();
+        }
+        this.virtualLists.clear();
+
+        // Clear all timers
+        for (const timer of this.debounceTimers.values())
+        {
+            clearTimeout(timer);
+        }
+        this.debounceTimers.clear();
+
+        // Clear cache
+        this.cache.clear();
+
+        // Remove event listeners
+        document.removeEventListener('click', this.handleClick);
+        document.removeEventListener('input', this.handleInput);
+        document.removeEventListener('keypress', this.handleKeypress);
+        document.removeEventListener('change', this.handleChange);
+
+        // Clear references
+        this.currentPin = null;
+        this.defaultKeywords = null;
+        this.defaultBlocklists = null;
     }
 }

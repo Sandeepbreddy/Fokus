@@ -1,3 +1,5 @@
+// popup.js - Optimized Fokus Popup with performance improvements
+
 class FokusPopup
 {
     constructor()
@@ -5,17 +7,24 @@ class FokusPopup
         this.currentUser = null;
         this.isAuthenticated = false;
         this.isOfflineMode = false;
+        this.statsCache = null;
+        this.cacheTimeout = 10000; // 10 seconds cache
+        this.lastCacheTime = 0;
         this.init();
     }
 
     async init()
     {
         console.log('Initializing Fokus popup...');
+        const startTime = performance.now();
+
         try
         {
             this.setupEventListeners();
             await this.checkAuthStatus();
-            console.log('Popup initialized successfully');
+
+            const initTime = performance.now() - startTime;
+            console.log(`Popup initialized in ${initTime.toFixed(2)}ms`);
         } catch (error)
         {
             console.error('Failed to initialize popup:', error);
@@ -59,19 +68,22 @@ class FokusPopup
         {
             const response = await this.sendMessage({ action: 'getAuthStatus' });
 
-            if (response && response.isAuthenticated && response.user)
+            if (response && response.isAuthenticated)
             {
-                console.log('User is authenticated:', response.user.email);
+                console.log('User is authenticated');
                 this.currentUser = response.user;
                 this.isAuthenticated = true;
+                this.isOfflineMode = response.isOfflineMode || false;
                 this.showDashboard();
             } else
             {
+                // Check for offline mode fallback
                 const offlineData = await chrome.storage.local.get(['offlineMode', 'offlineExpiry']);
                 if (offlineData.offlineMode && offlineData.offlineExpiry > Date.now())
                 {
                     console.log('Using offline mode');
                     this.isOfflineMode = true;
+                    this.currentUser = { email: offlineData.offlineEmail || 'offline@mode.local' };
                     this.showDashboard();
                 } else
                 {
@@ -105,6 +117,9 @@ class FokusPopup
     {
         document.getElementById('auth-section').style.display = 'flex';
         document.getElementById('dashboard-section').style.display = 'none';
+        document.getElementById('dashboard-section').classList.remove('active');
+
+        // Focus email input
         setTimeout(() =>
         {
             document.getElementById('signin-email')?.focus();
@@ -115,16 +130,149 @@ class FokusPopup
     {
         document.getElementById('auth-section').style.display = 'none';
         document.getElementById('dashboard-section').style.display = 'flex';
+        document.getElementById('dashboard-section').classList.add('active');
+
         this.loadDashboardData();
+    }
+
+    async loadDashboardData()
+    {
+        try
+        {
+            // Update user info
+            if (this.isOfflineMode)
+            {
+                document.getElementById('user-email').textContent = this.currentUser?.email || 'Offline Mode';
+                document.querySelector('.connection-status').textContent = '⚠️ Working offline';
+            } else if (this.currentUser)
+            {
+                document.getElementById('user-email').textContent = this.currentUser.email;
+                document.querySelector('.connection-status').textContent = '✅ Connected to cloud';
+            }
+
+            // Load all data in parallel
+            await Promise.all([
+                this.loadCurrentSite(),
+                this.loadStats(),
+                this.updateProtectionStatus()
+            ]);
+        } catch (error)
+        {
+            console.error('Failed to load dashboard data:', error);
+        }
+    }
+
+    async loadStats()
+    {
+        try
+        {
+            // Check if we have recent cache
+            if (this.statsCache && (Date.now() - this.lastCacheTime) < this.cacheTimeout)
+            {
+                this.updateStatsUI(this.statsCache);
+                return;
+            }
+
+            // Load fresh data
+            const data = await chrome.storage.local.get([
+                'blocksToday', 'focusStreak', 'customDomains', 'blockedDomains', 'totalBlocks'
+            ]);
+
+            // Cache the data
+            this.statsCache = data;
+            this.lastCacheTime = Date.now();
+
+            this.updateStatsUI(data);
+        } catch (error)
+        {
+            console.error('Failed to load stats:', error);
+            // Show defaults if error
+            this.updateStatsUI({
+                blocksToday: 0,
+                focusStreak: 0,
+                customDomains: [],
+                blockedDomains: [],
+                totalBlocks: 0
+            });
+        }
+    }
+
+    updateStatsUI(data)
+    {
+        document.getElementById('blocks-today').textContent = data.blocksToday || 0;
+        document.getElementById('focus-streak').textContent = data.focusStreak || 0;
+
+        const totalDomains = (data.customDomains?.length || 0) + (data.blockedDomains?.length || 0);
+        document.getElementById('total-domains').textContent = totalDomains.toLocaleString();
+
+        const estimatedHours = Math.floor((data.totalBlocks || 0) * 2 / 60);
+        document.getElementById('time-saved').textContent = estimatedHours > 0 ? `${estimatedHours}h` : '0h';
+    }
+
+    async loadCurrentSite()
+    {
+        try
+        {
+            const response = await this.sendMessage({ action: 'getCurrentTab' });
+            if (response && response.url)
+            {
+                try
+                {
+                    const url = new URL(response.url);
+                    document.getElementById('current-url').textContent = url.hostname;
+                } catch
+                {
+                    document.getElementById('current-url').textContent = 'Unable to detect';
+                }
+            } else
+            {
+                document.getElementById('current-url').textContent = 'Unable to detect';
+            }
+        } catch (error)
+        {
+            document.getElementById('current-url').textContent = 'Unable to detect';
+        }
+    }
+
+    async updateProtectionStatus()
+    {
+        try
+        {
+            const data = await chrome.storage.local.get(['isActive']);
+            const isActive = data.isActive !== undefined ? data.isActive : true;
+
+            const toggle = document.getElementById('protection-toggle');
+            const statusText = document.getElementById('protection-status');
+
+            if (isActive)
+            {
+                toggle?.classList.add('active');
+                if (statusText) statusText.textContent = 'Protection Active';
+            } else
+            {
+                toggle?.classList.remove('active');
+                if (statusText) statusText.textContent = 'Protection Paused';
+            }
+        } catch (error)
+        {
+            console.error('Failed to update protection status:', error);
+        }
     }
 
     switchAuthTab(tab)
     {
+        // Update tabs
         document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-        document.getElementById(`${tab}-tab`).classList.add('active');
+        document.getElementById(`${tab}-tab`)?.classList.add('active');
+
+        // Update forms
         document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
-        document.getElementById(`${tab}-form`).classList.add('active');
+        document.getElementById(`${tab}-form`)?.classList.add('active');
+
+        // Clear messages
         this.clearAuthMessages();
+
+        // Focus input
         setTimeout(() =>
         {
             document.getElementById(`${tab}-email`)?.focus();
@@ -160,6 +308,11 @@ class FokusPopup
                 this.showMessage(messageEl, 'Signed in successfully!', 'success');
                 this.currentUser = response.user;
                 this.isAuthenticated = true;
+                this.isOfflineMode = response.isOfflineMode || false;
+
+                // Clear cache
+                this.statsCache = null;
+
                 setTimeout(() =>
                 {
                     this.showDashboard();
@@ -229,6 +382,11 @@ class FokusPopup
                     this.showMessage(messageEl, 'Account created and signed in!', 'success');
                     this.currentUser = response.user;
                     this.isAuthenticated = true;
+                    this.isOfflineMode = response.isOfflineMode || false;
+
+                    // Clear cache
+                    this.statsCache = null;
+
                     setTimeout(() => this.showDashboard(), 1000);
                 }
             } else
@@ -253,108 +411,25 @@ class FokusPopup
 
         try
         {
-            const duration = 24 * 60 * 60 * 1000;
+            const duration = 24 * 60 * 60 * 1000; // 24 hours
             const expiry = Date.now() + duration;
+
             await chrome.storage.local.set({
                 offlineMode: true,
-                offlineExpiry: expiry
+                offlineExpiry: expiry,
+                offlineEmail: 'offline@mode.local'
             });
+
             this.isOfflineMode = true;
+            this.currentUser = { email: 'offline@mode.local' };
+            this.statsCache = null;
+
             this.showDashboard();
         } catch (error)
         {
             console.error('Failed to enable offline mode:', error);
             btn.textContent = 'Use Offline Mode';
             btn.disabled = false;
-        }
-    }
-
-    async loadDashboardData()
-    {
-        try
-        {
-            if (this.isOfflineMode)
-            {
-                document.getElementById('user-email').textContent = 'Offline Mode';
-                document.querySelector('.connection-status').textContent = 'Working offline';
-            } else if (this.currentUser)
-            {
-                document.getElementById('user-email').textContent = this.currentUser.email;
-                document.querySelector('.connection-status').textContent = 'Connected to cloud';
-            }
-
-            await this.loadStats();
-            await this.loadCurrentSite();
-            await this.updateProtectionStatus();
-        } catch (error)
-        {
-            console.error('Failed to load dashboard data:', error);
-        }
-    }
-
-    async loadStats()
-    {
-        try
-        {
-            const data = await chrome.storage.local.get([
-                'blocksToday', 'focusStreak', 'customDomains', 'blockedDomains', 'totalBlocks'
-            ]);
-
-            document.getElementById('blocks-today').textContent = data.blocksToday || 0;
-            document.getElementById('focus-streak').textContent = data.focusStreak || 0;
-
-            const totalDomains = (data.customDomains || []).length + (data.blockedDomains || []).length;
-            document.getElementById('total-domains').textContent = totalDomains.toLocaleString();
-
-            const estimatedHours = Math.floor((data.totalBlocks || 0) * 2 / 60);
-            document.getElementById('time-saved').textContent = estimatedHours > 0 ? `${estimatedHours}h` : '0h';
-        } catch (error)
-        {
-            console.error('Failed to load stats:', error);
-        }
-    }
-
-    async loadCurrentSite()
-    {
-        try
-        {
-            const response = await this.sendMessage({ action: 'getCurrentTab' });
-            if (response && response.url)
-            {
-                const url = new URL(response.url);
-                document.getElementById('current-url').textContent = url.hostname;
-            } else
-            {
-                document.getElementById('current-url').textContent = 'Unable to detect';
-            }
-        } catch (error)
-        {
-            document.getElementById('current-url').textContent = 'Unable to detect';
-        }
-    }
-
-    async updateProtectionStatus()
-    {
-        try
-        {
-            const data = await chrome.storage.local.get(['isActive']);
-            const isActive = data.isActive !== undefined ? data.isActive : true;
-
-            const toggle = document.getElementById('protection-toggle');
-            const statusText = document.getElementById('protection-status');
-
-            if (isActive)
-            {
-                toggle.classList.add('active');
-                statusText.textContent = 'Protection Active';
-            } else
-            {
-                toggle.classList.remove('active');
-                statusText.textContent = 'Protection Paused';
-            }
-        } catch (error)
-        {
-            console.error('Failed to update protection status:', error);
         }
     }
 
@@ -367,6 +442,10 @@ class FokusPopup
             const newState = !currentState;
 
             await this.sendMessage({ action: 'setActive', active: newState });
+
+            // Clear cache to force reload
+            this.statsCache = null;
+
             await this.updateProtectionStatus();
 
             const message = newState ? 'Protection enabled' : 'Protection paused';
@@ -374,6 +453,7 @@ class FokusPopup
         } catch (error)
         {
             console.error('Failed to toggle protection:', error);
+            this.showTempMessage('Failed to toggle protection');
         }
     }
 
@@ -391,10 +471,13 @@ class FokusPopup
             if (response && response.success)
             {
                 this.showTempMessage(`Blocked: ${response.domain}`);
+
+                // Clear cache and reload stats
+                this.statsCache = null;
                 await this.loadStats();
             } else
             {
-                this.showTempMessage('Failed to block site');
+                this.showTempMessage(response?.error || 'Failed to block site');
             }
         } catch (error)
         {
@@ -410,13 +493,15 @@ class FokusPopup
     {
         try
         {
-            const optionsUrl = chrome.runtime.getURL('options.html');
-            chrome.tabs.create({ url: optionsUrl, active: true });
+            chrome.runtime.openOptionsPage();
             window.close();
         } catch (error)
         {
             console.error('Failed to open settings:', error);
-            this.showTempMessage('Failed to open settings');
+            // Fallback method
+            const optionsUrl = chrome.runtime.getURL('options.html');
+            chrome.tabs.create({ url: optionsUrl });
+            window.close();
         }
     }
 
@@ -436,13 +521,25 @@ class FokusPopup
 
         try
         {
-            await this.sendMessage({ action: 'syncToCloud' });
-            await this.sendMessage({ action: 'syncFromCloud' });
-            this.showTempMessage('Sync completed');
-            await this.loadStats();
+            // Sync to cloud first, then from cloud
+            const syncToResult = await this.sendMessage({ action: 'syncToCloud' });
+            const syncFromResult = await this.sendMessage({ action: 'syncFromCloud' });
+
+            if (syncToResult?.success || syncFromResult?.success)
+            {
+                this.showTempMessage('Sync completed successfully');
+
+                // Clear cache and reload stats
+                this.statsCache = null;
+                await this.loadStats();
+            } else
+            {
+                this.showTempMessage('Sync failed - please try again');
+            }
         } catch (error)
         {
-            this.showTempMessage('Sync failed');
+            console.error('Sync error:', error);
+            this.showTempMessage('Sync failed - please check your connection');
         } finally
         {
             btn.textContent = originalText;
@@ -456,17 +553,15 @@ class FokusPopup
 
         try
         {
-            if (!this.isOfflineMode)
-            {
-                await this.sendMessage({ action: 'signOut' });
-            } else
-            {
-                await chrome.storage.local.remove(['offlineMode', 'offlineExpiry']);
-            }
+            await this.sendMessage({ action: 'signOut' });
+
+            // Clear local offline mode data
+            await chrome.storage.local.remove(['offlineMode', 'offlineExpiry', 'offlineEmail']);
 
             this.currentUser = null;
             this.isAuthenticated = false;
             this.isOfflineMode = false;
+            this.statsCache = null;
 
             this.showAuthentication();
             this.clearAuthMessages();
@@ -497,14 +592,19 @@ class FokusPopup
 
     showTempMessage(message)
     {
+        // Remove existing toast if any
+        const existing = document.querySelector('.toast-overlay');
+        if (existing) existing.remove();
+
         const overlay = document.createElement('div');
+        overlay.className = 'toast-overlay';
         overlay.style.cssText = `
             position: fixed;
             top: 10px;
             left: 10px;
             right: 10px;
             padding: 10px;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.85);
             color: white;
             border-radius: 6px;
             font-size: 12px;
@@ -514,6 +614,7 @@ class FokusPopup
         `;
         overlay.textContent = message;
 
+        // Add animation styles if not present
         if (!document.getElementById('temp-message-styles'))
         {
             const style = document.createElement('style');
@@ -522,6 +623,10 @@ class FokusPopup
                 @keyframes slideDown {
                     from { transform: translateY(-20px); opacity: 0; }
                     to { transform: translateY(0); opacity: 1; }
+                }
+                @keyframes slideUp {
+                    from { transform: translateY(0); opacity: 1; }
+                    to { transform: translateY(-20px); opacity: 0; }
                 }
             `;
             document.head.appendChild(style);
@@ -533,12 +638,12 @@ class FokusPopup
         {
             if (overlay.parentNode)
             {
-                overlay.style.animation = 'slideDown 0.3s ease-out reverse';
+                overlay.style.animation = 'slideUp 0.3s ease-out';
                 setTimeout(() =>
                 {
                     if (overlay.parentNode)
                     {
-                        overlay.parentNode.removeChild(overlay);
+                        overlay.remove();
                     }
                 }, 300);
             }
@@ -547,8 +652,10 @@ class FokusPopup
 
     clearAuthMessages()
     {
-        document.getElementById('signin-message').innerHTML = '';
-        document.getElementById('signup-message').innerHTML = '';
+        const signinMsg = document.getElementById('signin-message');
+        const signupMsg = document.getElementById('signup-message');
+        if (signinMsg) signinMsg.innerHTML = '';
+        if (signupMsg) signupMsg.innerHTML = '';
     }
 
     showError(message)
@@ -587,9 +694,11 @@ class FokusPopup
 document.addEventListener('DOMContentLoaded', () =>
 {
     console.log('Fokus popup DOM loaded');
+    const startTime = performance.now();
 
     try
     {
+        // Verify required elements exist
         const requiredElements = [
             'signin-tab', 'signup-tab', 'signin-form', 'signup-form',
             'signin-email', 'signin-password', 'signin-btn',
@@ -605,29 +714,73 @@ document.addEventListener('DOMContentLoaded', () =>
             throw new Error(`Missing elements: ${missingElements.join(', ')}`);
         }
 
-        new FokusPopup();
-        console.log('Fokus popup initialized successfully');
+        // Initialize popup
+        window.fokusPopup = new FokusPopup();
+
+        const loadTime = performance.now() - startTime;
+        console.log(`Fokus popup initialized in ${loadTime.toFixed(2)}ms`);
 
     } catch (error)
     {
         console.error('Failed to initialize popup:', error);
 
+        // Show error UI
         document.body.innerHTML = `
-            <div style="padding: 20px; color: #721c24; background: #f8d7da; border-radius: 8px; margin: 10px; font-family: Arial, sans-serif; font-size: 14px;">
-                <div style="text-align: center; margin-bottom: 15px;">
-                    <strong>Popup Error</strong>
+            <div style="padding: 20px; text-align: center; font-family: Arial, sans-serif;">
+                <div style="color: #e74c3c; font-size: 16px; font-weight: bold; margin-bottom: 10px;">
+                    Initialization Error
                 </div>
-                <p>Failed to initialize Fokus popup. Please try:</p>
-                <ul style="margin: 10px 0; padding-left: 20px;">
-                    <li>Refreshing the extension</li>
-                    <li>Reloading the browser</li>
-                    <li>Checking browser console for errors</li>
-                </ul>
-                <div style="font-size: 11px; margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.1); border-radius: 4px;">
-                    <strong>Technical details:</strong><br>
-                    ${error.message}
+                <p style="color: #333; font-size: 14px; margin-bottom: 15px;">
+                    Failed to initialize Fokus popup.
+                </p>
+                <button onclick="location.reload()" style="
+                    background: #4CAF50;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    font-size: 14px;
+                ">
+                    Reload
+                </button>
+                <div style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 5px;">
+                    <small style="color: #666;">
+                        Error: ${error.message}
+                    </small>
                 </div>
             </div>
         `;
+    }
+});
+
+// Error tracking
+window.addEventListener('error', (event) =>
+{
+    console.error('Popup error:', event.error);
+
+    // Store error for debugging
+    chrome.storage.local.get(['errorLog'], (data) =>
+    {
+        const errors = data.errorLog || [];
+        errors.push({
+            message: event.error.message,
+            stack: event.error.stack,
+            timestamp: new Date().toISOString(),
+            context: 'popup'
+        });
+        chrome.storage.local.set({
+            errorLog: errors.slice(-50) // Keep only last 50 errors
+        });
+    });
+});
+
+// Cleanup on unload
+window.addEventListener('unload', () =>
+{
+    if (window.fokusPopup)
+    {
+        window.fokusPopup.statsCache = null;
+        window.fokusPopup = null;
     }
 });

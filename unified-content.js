@@ -1,5 +1,6 @@
 console.log('Fokus content script loaded');
 
+// Optimized Unified Blocker with performance improvements
 class UnifiedBlocker
 {
     constructor()
@@ -9,6 +10,24 @@ class UnifiedBlocker
         this.customDomains = new Set();
         this.isActive = true;
         this.initialized = false;
+        this.settingsLoaded = false;
+        this.lastUrl = location.href;
+
+        // Performance optimizations
+        this.debounceTimers = new Map();
+        this.mutationObserver = null;
+
+        // Whitelist of domains to skip
+        this.whitelist = new Set([
+            'chrome.google.com',
+            'addons.mozilla.org',
+            'microsoftedge.microsoft.com',
+            'chrome-extension',
+            'moz-extension',
+            'edge-extension'
+        ]);
+
+        // Initialize
         this.init();
     }
 
@@ -17,31 +36,79 @@ class UnifiedBlocker
         // Skip if already on blocked page or extension pages
         if (window.location.href.includes('chrome-extension://') ||
             window.location.href.includes('moz-extension://') ||
+            window.location.href.includes('edge-extension://') ||
             window.location.href.includes('blocked.html'))
         {
             return;
         }
 
+        // Skip initialization for whitelisted domains
+        const hostname = window.location.hostname;
+        if (this.isWhitelisted(hostname))
+        {
+            console.log('Skipping initialization for whitelisted domain:', hostname);
+            return;
+        }
+
+        // Load settings lazily
         await this.loadSettings();
+
+        // Check current page immediately
         this.checkCurrentPage();
-        this.setupMonitoring();
+
+        // Defer non-critical monitoring
+        if (typeof requestIdleCallback !== 'undefined')
+        {
+            requestIdleCallback(() =>
+            {
+                this.setupMonitoring();
+            }, { timeout: 2000 });
+        } else
+        {
+            // Fallback for browsers without requestIdleCallback
+            setTimeout(() =>
+            {
+                this.setupMonitoring();
+            }, 100);
+        }
+
         this.initialized = true;
+    }
+
+    isWhitelisted(hostname)
+    {
+        for (const domain of this.whitelist)
+        {
+            if (hostname.includes(domain))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     async loadSettings()
     {
+        if (this.settingsLoaded) return;
+
         try
         {
             const data = await chrome.storage.local.get([
                 'blockedKeywords', 'isActive', 'blockedDomains', 'customDomains'
             ]);
+
             this.blockedKeywords = new Set(data.blockedKeywords || []);
             this.blockedDomains = new Set(data.blockedDomains || []);
             this.customDomains = new Set(data.customDomains || []);
             this.isActive = data.isActive !== undefined ? data.isActive : true;
+            this.settingsLoaded = true;
+
+            console.log(`Loaded settings: ${this.blockedKeywords.size} keywords, ${this.blockedDomains.size + this.customDomains.size} domains`);
         } catch (error)
         {
             console.log('Failed to load settings:', error);
+            // Use default keywords as fallback
+            this.blockedKeywords = new Set(['porn', 'xxx', 'sex', 'adult', 'nude', 'naked', 'explicit', 'erotic']);
         }
     }
 
@@ -87,17 +154,24 @@ class UnifiedBlocker
     isDomainBlocked(hostname)
     {
         if (!this.isActive) return false;
-        if (this.customDomains.has(hostname)) return true;
-        if (this.blockedDomains.has(hostname)) return true;
 
-        for (const domain of this.customDomains)
+        // Direct lookup first (fastest)
+        if (this.customDomains.has(hostname) || this.blockedDomains.has(hostname))
         {
-            if (hostname.endsWith('.' + domain)) return true;
+            return true;
         }
-        for (const domain of this.blockedDomains)
+
+        // Check subdomains (slower, so do it second)
+        const hostParts = hostname.split('.');
+        for (let i = 1; i < hostParts.length; i++)
         {
-            if (hostname.endsWith('.' + domain)) return true;
+            const parentDomain = hostParts.slice(i).join('.');
+            if (this.customDomains.has(parentDomain) || this.blockedDomains.has(parentDomain))
+            {
+                return true;
+            }
         }
+
         return false;
     }
 
@@ -105,6 +179,8 @@ class UnifiedBlocker
     {
         if (!this.isActive || !text) return false;
         const lowerText = text.toLowerCase();
+
+        // Use for...of for better performance with early return
         for (const keyword of this.blockedKeywords)
         {
             if (lowerText.includes(keyword.toLowerCase()))
@@ -117,143 +193,277 @@ class UnifiedBlocker
 
     redirectToBlockedPage(reason, domain = null, url = null, keyword = null)
     {
+        // Stop page loading immediately
+        if (window.stop)
+        {
+            window.stop();
+        }
+
         let blockedUrl = chrome.runtime.getURL('blocked.html') + '?reason=' + reason;
         if (domain) blockedUrl += '&domain=' + encodeURIComponent(domain);
         if (url) blockedUrl += '&url=' + encodeURIComponent(url);
         if (keyword) blockedUrl += '&keyword=' + encodeURIComponent(keyword);
 
-        // Stop page loading
-        if (window.stop) window.stop();
         window.location.replace(blockedUrl);
     }
 
     setupMonitoring()
     {
-        // Monitor URL changes for SPAs
-        let lastUrl = location.href;
-        new MutationObserver(() =>
-        {
-            const url = location.href;
-            if (url !== lastUrl)
-            {
-                lastUrl = url;
-                setTimeout(() => this.checkCurrentPage(), 100);
-            }
-        }).observe(document, { subtree: true, childList: true });
+        // Optimized MutationObserver with specific config
+        this.setupOptimizedMutationObserver();
 
-        // Monitor history API
-        const originalPushState = history.pushState;
-        const originalReplaceState = history.replaceState;
+        // Monitor history API changes
+        this.setupHistoryMonitoring();
 
-        history.pushState = function ()
-        {
-            originalPushState.apply(history, arguments);
-            setTimeout(() => unifiedBlocker.checkCurrentPage(), 100);
-        };
-
-        history.replaceState = function ()
-        {
-            originalReplaceState.apply(history, arguments);
-            setTimeout(() => unifiedBlocker.checkCurrentPage(), 100);
-        };
-
-        // Monitor popstate
-        window.addEventListener('popstate', () =>
-        {
-            setTimeout(() => this.checkCurrentPage(), 100);
-        });
-
-        // Monitor link clicks
-        document.addEventListener('click', (e) =>
-        {
-            const link = e.target.closest('a');
-            if (link && link.href)
-            {
-                try
-                {
-                    const url = new URL(link.href);
-                    if (this.isDomainBlocked(url.hostname) || this.containsBlockedKeywords(link.href))
-                    {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        this.redirectToBlockedPage(
-                            this.isDomainBlocked(url.hostname) ? 'domain' : 'keyword',
-                            url.hostname,
-                            link.href
-                        );
-                    }
-                } catch (error)
-                {
-                    // Invalid URL, ignore
-                }
-            }
-        }, true);
+        // Monitor link clicks with delegation
+        this.setupLinkMonitoring();
 
         // Monitor form submissions
-        document.addEventListener('submit', (e) =>
-        {
-            const form = e.target;
-            const inputs = form.querySelectorAll('input[type="search"], input[name*="search"], input[name*="query"], input[name="q"]');
-
-            for (const input of inputs)
-            {
-                const blockedKeyword = this.containsBlockedKeywords(input.value);
-                if (blockedKeyword)
-                {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    this.redirectToBlockedPage('search', null, input.value, blockedKeyword);
-                    return;
-                }
-            }
-        }, true);
+        this.setupFormMonitoring();
 
         // Special handling for search engines
-        if (window.location.hostname.includes('google.com') ||
-            window.location.hostname.includes('bing.com') ||
-            window.location.hostname.includes('duckduckgo.com'))
+        if (this.isSearchEngine())
         {
             this.setupSearchInterception();
         }
     }
 
-    setupSearchInterception()
+    setupOptimizedMutationObserver()
     {
-        const searchInput = document.querySelector('input[name="q"], input#search, input[type="search"]');
-        if (searchInput)
+        // Use debounced observer for better performance
+        const debouncedCheck = this.debounce(() =>
         {
-            searchInput.addEventListener('input', (e) =>
+            const url = location.href;
+            if (url !== this.lastUrl)
             {
-                const blockedKeyword = this.containsBlockedKeywords(e.target.value);
+                this.lastUrl = url;
+                this.checkCurrentPage();
+            }
+        }, 200);
+
+        // Only observe body with minimal config
+        const targetNode = document.body;
+        if (targetNode)
+        {
+            this.mutationObserver = new MutationObserver(debouncedCheck);
+            this.mutationObserver.observe(targetNode, {
+                childList: true,
+                subtree: false, // Don't observe entire subtree for performance
+                attributes: false,
+                characterData: false
+            });
+        }
+    }
+
+    setupHistoryMonitoring()
+    {
+        // Wrap history methods
+        const originalPushState = history.pushState;
+        const originalReplaceState = history.replaceState;
+        const debouncedCheck = this.debounce(() => this.checkCurrentPage(), 100);
+
+        history.pushState = function ()
+        {
+            originalPushState.apply(history, arguments);
+            debouncedCheck();
+        };
+
+        history.replaceState = function ()
+        {
+            originalReplaceState.apply(history, arguments);
+            debouncedCheck();
+        };
+
+        // Monitor popstate
+        window.addEventListener('popstate', debouncedCheck);
+    }
+
+    setupLinkMonitoring()
+    {
+        // Use event delegation for better performance
+        document.addEventListener('click', (e) =>
+        {
+            // Find closest link element
+            const link = e.target.closest('a');
+            if (!link || !link.href) return;
+
+            // Skip internal links
+            if (link.href.startsWith('#') || link.href.startsWith('javascript:')) return;
+
+            try
+            {
+                const url = new URL(link.href);
+
+                // Quick check for blocked content
+                if (this.isDomainBlocked(url.hostname) || this.containsBlockedKeywords(link.href))
+                {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+
+                    this.redirectToBlockedPage(
+                        this.isDomainBlocked(url.hostname) ? 'domain' : 'keyword',
+                        url.hostname,
+                        link.href
+                    );
+                }
+            } catch (error)
+            {
+                // Invalid URL, ignore
+            }
+        }, true); // Use capture phase for earlier interception
+    }
+
+    setupFormMonitoring()
+    {
+        // Monitor form submissions with delegation
+        document.addEventListener('submit', (e) =>
+        {
+            const form = e.target;
+
+            // Check search-related inputs
+            const searchSelectors = [
+                'input[type="search"]',
+                'input[name*="search"]',
+                'input[name*="query"]',
+                'input[name="q"]',
+                'input[placeholder*="search" i]'
+            ];
+
+            const inputs = form.querySelectorAll(searchSelectors.join(','));
+
+            for (const input of inputs)
+            {
+                if (!input.value) continue;
+
+                const blockedKeyword = this.containsBlockedKeywords(input.value);
                 if (blockedKeyword)
                 {
-                    e.target.style.border = '2px solid #ff4444';
-                    e.target.style.backgroundColor = '#ffe6e6';
-                } else
-                {
-                    e.target.style.border = '';
-                    e.target.style.backgroundColor = '';
-                }
-            });
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
 
-            searchInput.addEventListener('keydown', (e) =>
+                    this.redirectToBlockedPage('search', null, input.value, blockedKeyword);
+                    return;
+                }
+            }
+        }, true);
+    }
+
+    isSearchEngine()
+    {
+        const hostname = window.location.hostname;
+        const searchEngines = ['google.com', 'bing.com', 'duckduckgo.com', 'yahoo.com', 'baidu.com', 'yandex'];
+        return searchEngines.some(engine => hostname.includes(engine));
+    }
+
+    setupSearchInterception()
+    {
+        // Find search input with multiple selectors
+        const searchSelectors = [
+            'input[name="q"]',
+            'input#search',
+            'input[type="search"]',
+            'input[role="combobox"]',
+            'input[aria-label*="search" i]',
+            'input[placeholder*="search" i]'
+        ];
+
+        const searchInput = document.querySelector(searchSelectors.join(','));
+        if (!searchInput) return;
+
+        // Visual feedback for blocked keywords
+        const checkInput = this.debounce((e) =>
+        {
+            const blockedKeyword = this.containsBlockedKeywords(e.target.value);
+            if (blockedKeyword)
             {
-                if (e.key === 'Enter')
+                e.target.style.border = '2px solid #ff4444';
+                e.target.style.backgroundColor = '#ffe6e6';
+                e.target.setAttribute('data-blocked', 'true');
+            } else
+            {
+                e.target.style.border = '';
+                e.target.style.backgroundColor = '';
+                e.target.removeAttribute('data-blocked');
+            }
+        }, 150);
+
+        searchInput.addEventListener('input', checkInput);
+
+        // Prevent submission of blocked searches
+        searchInput.addEventListener('keydown', (e) =>
+        {
+            if (e.key === 'Enter' && e.target.getAttribute('data-blocked') === 'true')
+            {
+                e.preventDefault();
+                e.stopPropagation();
+                const blockedKeyword = this.containsBlockedKeywords(e.target.value);
+                this.redirectToBlockedPage('search', null, e.target.value, blockedKeyword);
+            }
+        });
+
+        // Also monitor the search button if exists
+        const searchButton = document.querySelector('button[type="submit"], input[type="submit"], button[aria-label*="search" i]');
+        if (searchButton)
+        {
+            searchButton.addEventListener('click', (e) =>
+            {
+                if (searchInput.getAttribute('data-blocked') === 'true')
                 {
-                    const blockedKeyword = this.containsBlockedKeywords(e.target.value);
-                    if (blockedKeyword)
-                    {
-                        e.preventDefault();
-                        this.redirectToBlockedPage('search', null, e.target.value, blockedKeyword);
-                    }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const blockedKeyword = this.containsBlockedKeywords(searchInput.value);
+                    this.redirectToBlockedPage('search', null, searchInput.value, blockedKeyword);
                 }
             });
         }
     }
+
+    debounce(func, wait)
+    {
+        return (...args) =>
+        {
+            const key = func.toString();
+            clearTimeout(this.debounceTimers.get(key));
+
+            const timeout = setTimeout(() =>
+            {
+                this.debounceTimers.delete(key);
+                func.apply(this, args);
+            }, wait);
+
+            this.debounceTimers.set(key, timeout);
+        };
+    }
+
+    // Cleanup method to prevent memory leaks
+    destroy()
+    {
+        // Disconnect mutation observer
+        if (this.mutationObserver)
+        {
+            this.mutationObserver.disconnect();
+            this.mutationObserver = null;
+        }
+
+        // Clear all timers
+        for (const timer of this.debounceTimers.values())
+        {
+            clearTimeout(timer);
+        }
+        this.debounceTimers.clear();
+
+        // Clear data
+        this.blockedKeywords.clear();
+        this.blockedDomains.clear();
+        this.customDomains.clear();
+    }
 }
 
-// Initialize
+// Initialize with performance tracking
 let unifiedBlocker;
+const initStartTime = performance.now();
 
 function initialize()
 {
@@ -262,7 +472,8 @@ function initialize()
         if (!unifiedBlocker)
         {
             unifiedBlocker = new UnifiedBlocker();
-            console.log('Unified blocker initialized');
+            const initTime = performance.now() - initStartTime;
+            console.log(`Unified blocker initialized in ${initTime.toFixed(2)}ms`);
         }
     } catch (error)
     {
@@ -270,23 +481,28 @@ function initialize()
     }
 }
 
-// Immediate check for Google search results
+// Immediate check for Google search results (highest priority)
 if (window.location.hostname.includes('google.com') && window.location.pathname.includes('/search'))
 {
     const urlParams = new URLSearchParams(window.location.search);
     const searchQuery = urlParams.get('q');
     if (searchQuery)
     {
-        const defaultKeywords = ['porn', 'xxx', 'sex', 'adult', 'nude', 'naked', 'explicit', 'erotic'];
+        // Use minimal keyword set for immediate blocking
+        const criticalKeywords = ['porn', 'xxx', 'sex', 'adult', 'nude', 'naked', 'explicit', 'erotic'];
         const lowerQuery = searchQuery.toLowerCase();
-        for (const keyword of defaultKeywords)
+
+        for (const keyword of criticalKeywords)
         {
             if (lowerQuery.includes(keyword))
             {
+                // Stop page immediately
                 if (window.stop) window.stop();
+
                 const blockedUrl = chrome.runtime.getURL('blocked.html') +
                     '?reason=search&keyword=' + encodeURIComponent(keyword) +
                     '&query=' + encodeURIComponent(searchQuery);
+
                 window.location.replace(blockedUrl);
                 break;
             }
@@ -294,6 +510,7 @@ if (window.location.hostname.includes('google.com') && window.location.pathname.
     }
 }
 
+// Initialize based on document state
 if (document.readyState === 'loading')
 {
     document.addEventListener('DOMContentLoaded', initialize);
@@ -302,7 +519,7 @@ if (document.readyState === 'loading')
     initialize();
 }
 
-// Ensure initialization happens
+// Fallback initialization
 setTimeout(() =>
 {
     if (!unifiedBlocker)
@@ -310,3 +527,13 @@ setTimeout(() =>
         initialize();
     }
 }, 50);
+
+// Cleanup on page unload to prevent memory leaks
+window.addEventListener('unload', () =>
+{
+    if (unifiedBlocker)
+    {
+        unifiedBlocker.destroy();
+        unifiedBlocker = null;
+    }
+});
