@@ -91,7 +91,7 @@ class BatchStorage
     }
 }
 
-// Trie data structure for efficient domain matching
+// efficient domain matching
 class DomainTrie
 {
     constructor()
@@ -263,7 +263,6 @@ class BlocklistManager
     }
 }
 
-// Optimized Content Blocker
 class ContentBlocker
 {
     constructor()
@@ -275,13 +274,10 @@ class ContentBlocker
         this.lastGithubUpdate = 0;
         this.githubUpdateInterval = 24 * 60 * 60 * 1000;
 
-        // Performance optimizations
         this.tabCache = new Map();
         this.pendingChecks = new Map();
         this.batchStorage = new BatchStorage();
         this.blocklistManager = new BlocklistManager();
-
-        // Initialize
         this.init();
     }
 
@@ -302,7 +298,6 @@ class ContentBlocker
 
     setupTabCleanup()
     {
-        // Clean up cache for closed tabs
         chrome.tabs.onRemoved.addListener((tabId) =>
         {
             this.tabCache.delete(tabId);
@@ -314,27 +309,24 @@ class ContentBlocker
             }
         });
 
-        // Periodic cleanup of stale entries
         setInterval(() =>
         {
             const now = Date.now();
 
-            // Clean tab cache
             if (this.tabCache.size > 100)
             {
                 const entries = Array.from(this.tabCache.entries());
                 this.tabCache = new Map(entries.slice(-50));
             }
 
-            // Clean stale cache entries
             for (const [key, value] of this.tabCache.entries())
             {
                 if (now - value.timestamp > 30000)
-                { // 30 seconds
+                {
                     this.tabCache.delete(key);
                 }
             }
-        }, 60000); // Every minute
+        }, 60000);
     }
 
     setupEventHandlers()
@@ -362,7 +354,7 @@ class ContentBlocker
         const defaultKeywords = [
             'adult', 'porn', 'xxx', 'sex', 'nude', 'naked', 'nsfw',
             'explicit', 'mature', 'erotic', 'lesbian', 'gay', 'anal',
-            'oral', 'bdsm', 'fetish', 'webcam', 'escort', 'dating'
+            'oral', 'bdsm', 'fetish', 'webcam', 'escort', 'uncensored', 'decensored'
         ];
 
         await this.batchStorage.set({
@@ -381,7 +373,6 @@ class ContentBlocker
 
     setupBlocking()
     {
-        // Use debounced check for tab updates
         chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) =>
         {
             if (changeInfo.status === 'loading' && tab.url)
@@ -409,7 +400,6 @@ class ContentBlocker
 
     async debouncedCheckAndBlockTab(tabId, url)
     {
-        // Cancel pending check for this tab
         const existingTimeout = this.pendingChecks.get(tabId);
         if (existingTimeout)
         {
@@ -437,11 +427,11 @@ class ContentBlocker
             if (urlObj.protocol === 'chrome-extension:' ||
                 urlObj.protocol === 'moz-extension:') return;
 
-            // Check cache
+
             const cacheKey = `${tabId}-${url}`;
             const cached = this.tabCache.get(cacheKey);
             if (cached && Date.now() - cached.timestamp < 5000)
-            { // 5 second cache
+            {
                 if (cached.blocked)
                 {
                     chrome.tabs.update(tabId, { url: cached.redirectUrl });
@@ -469,7 +459,6 @@ class ContentBlocker
                 }
             }
 
-            // Cache result
             this.tabCache.set(cacheKey, {
                 blocked,
                 redirectUrl,
@@ -496,7 +485,6 @@ class ContentBlocker
                 'blockedDomains', 'lastGithubUpdate'
             ]);
 
-            // Load domains into Trie structures
             this.domainTrie.clear();
             this.customDomainTrie.clear();
 
@@ -1019,14 +1007,12 @@ async function syncFromCloud()
     }
 }
 
-// Initialize with performance monitoring
 async function initialize()
 {
     const startTime = performance.now();
 
     try
     {
-        // Initialize Supabase in parallel with content blocker
         const [supabaseResult] = await Promise.all([
             initializeSupabase(),
             new Promise(resolve =>
@@ -1122,6 +1108,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
                         error: 'Blocklist features coming soon',
                         canRetry: false
                     };
+                    break;
+                case 'getBlockedPageUrl':
+                    let blockedUrl = chrome.runtime.getURL('blocked.html') + '?reason=' + message.reason;
+                    if (message.domain) blockedUrl += '&domain=' + encodeURIComponent(message.domain);
+                    if (message.url) blockedUrl += '&url=' + encodeURIComponent(message.url);
+                    if (message.keyword) blockedUrl += '&keyword=' + encodeURIComponent(message.keyword);
+                    result = { blockedUrl: blockedUrl };
                     break;
                 default:
                     result = {

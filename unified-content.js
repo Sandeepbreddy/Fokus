@@ -191,7 +191,7 @@ class UnifiedBlocker
         return false;
     }
 
-    redirectToBlockedPage(reason, domain = null, url = null, keyword = null)
+    async redirectToBlockedPage(reason, domain = null, url = null, keyword = null)
     {
         // Stop page loading immediately
         if (window.stop)
@@ -199,12 +199,36 @@ class UnifiedBlocker
             window.stop();
         }
 
-        let blockedUrl = chrome.runtime.getURL('blocked.html') + '?reason=' + reason;
-        if (domain) blockedUrl += '&domain=' + encodeURIComponent(domain);
-        if (url) blockedUrl += '&url=' + encodeURIComponent(url);
-        if (keyword) blockedUrl += '&keyword=' + encodeURIComponent(keyword);
+        try
+        {
+            // Get blocked page URL from background script
+            const response = await chrome.runtime.sendMessage({
+                action: 'getBlockedPageUrl',
+                reason: reason,
+                domain: domain,
+                url: url,
+                keyword: keyword
+            });
 
-        window.location.replace(blockedUrl);
+            if (response && response.blockedUrl)
+            {
+                window.location.replace(response.blockedUrl);
+            } else
+            {
+                // Fallback - construct URL manually
+                let blockedUrl = '/blocked.html?reason=' + reason;
+                if (domain) blockedUrl += '&domain=' + encodeURIComponent(domain);
+                if (url) blockedUrl += '&url=' + encodeURIComponent(url);
+                if (keyword) blockedUrl += '&keyword=' + encodeURIComponent(keyword);
+
+                window.location.replace(blockedUrl);
+            }
+        } catch (error)
+        {
+            console.error('Failed to redirect to blocked page:', error);
+            // Final fallback
+            window.location.replace('/blocked.html');
+        }
     }
 
     setupMonitoring()
@@ -281,7 +305,7 @@ class UnifiedBlocker
     setupLinkMonitoring()
     {
         // Use event delegation for better performance
-        document.addEventListener('click', (e) =>
+        document.addEventListener('click', async (e) =>
         {
             // Find closest link element
             const link = e.target.closest('a');
@@ -301,7 +325,7 @@ class UnifiedBlocker
                     e.stopPropagation();
                     e.stopImmediatePropagation();
 
-                    this.redirectToBlockedPage(
+                    await this.redirectToBlockedPage(
                         this.isDomainBlocked(url.hostname) ? 'domain' : 'keyword',
                         url.hostname,
                         link.href
@@ -317,7 +341,7 @@ class UnifiedBlocker
     setupFormMonitoring()
     {
         // Monitor form submissions with delegation
-        document.addEventListener('submit', (e) =>
+        document.addEventListener('submit', async (e) =>
         {
             const form = e.target;
 
@@ -343,7 +367,7 @@ class UnifiedBlocker
                     e.stopPropagation();
                     e.stopImmediatePropagation();
 
-                    this.redirectToBlockedPage('search', null, input.value, blockedKeyword);
+                    await this.redirectToBlockedPage('search', null, input.value, blockedKeyword);
                     return;
                 }
             }
@@ -392,14 +416,14 @@ class UnifiedBlocker
         searchInput.addEventListener('input', checkInput);
 
         // Prevent submission of blocked searches
-        searchInput.addEventListener('keydown', (e) =>
+        searchInput.addEventListener('keydown', async (e) =>
         {
             if (e.key === 'Enter' && e.target.getAttribute('data-blocked') === 'true')
             {
                 e.preventDefault();
                 e.stopPropagation();
                 const blockedKeyword = this.containsBlockedKeywords(e.target.value);
-                this.redirectToBlockedPage('search', null, e.target.value, blockedKeyword);
+                await this.redirectToBlockedPage('search', null, e.target.value, blockedKeyword);
             }
         });
 
@@ -407,14 +431,14 @@ class UnifiedBlocker
         const searchButton = document.querySelector('button[type="submit"], input[type="submit"], button[aria-label*="search" i]');
         if (searchButton)
         {
-            searchButton.addEventListener('click', (e) =>
+            searchButton.addEventListener('click', async (e) =>
             {
                 if (searchInput.getAttribute('data-blocked') === 'true')
                 {
                     e.preventDefault();
                     e.stopPropagation();
                     const blockedKeyword = this.containsBlockedKeywords(searchInput.value);
-                    this.redirectToBlockedPage('search', null, searchInput.value, blockedKeyword);
+                    await this.redirectToBlockedPage('search', null, searchInput.value, blockedKeyword);
                 }
             });
         }
@@ -499,11 +523,9 @@ if (window.location.hostname.includes('google.com') && window.location.pathname.
                 // Stop page immediately
                 if (window.stop) window.stop();
 
-                const blockedUrl = chrome.runtime.getURL('blocked.html') +
-                    '?reason=search&keyword=' + encodeURIComponent(keyword) +
-                    '&query=' + encodeURIComponent(searchQuery);
-
-                window.location.replace(blockedUrl);
+                // Use basic redirect since we can't easily access chrome.runtime.getURL here
+                window.location.replace('/blocked.html?reason=search&keyword=' +
+                    encodeURIComponent(keyword) + '&query=' + encodeURIComponent(searchQuery));
                 break;
             }
         }

@@ -24,7 +24,7 @@
                 "*://*/*"
             ],
             "js": [
-                "content-unified.js"
+                "unified-content.js"
             ],
             "run_at": "document_start"
         }

@@ -1,13 +1,11 @@
-// Blocked page script for Focus Guard extension
 
-// Parse URL parameters to show specific blocking information
 const urlParams = new URLSearchParams(window.location.search);
 const domain = urlParams.get('domain');
 const reason = urlParams.get('reason');
 const keyword = urlParams.get('keyword');
 const query = urlParams.get('query');
 
-// Update blocked info based on reason
+
 function updateBlockedInfo()
 {
     const blockedInfo = document.getElementById('blocked-info');
@@ -34,7 +32,6 @@ function updateBlockedInfo()
     }
 }
 
-// Load and display statistics
 async function loadStats()
 {
     try
@@ -44,7 +41,7 @@ async function loadStats()
         const today = new Date().toDateString();
         const lastBlockDate = data.lastBlockDate || '';
 
-        // Reset daily counter if it's a new day
+
         let blocksToday = data.blocksToday || 0;
         if (lastBlockDate !== today)
         {
