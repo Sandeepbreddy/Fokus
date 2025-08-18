@@ -1,6 +1,7 @@
-console.log('Fokus content script loaded');
+// src/content/unified-blocker.js - Optimized content script
+import { WHITELIST_DOMAINS, SEARCH_ENGINES, BLOCKED_REASONS } from '../shared/constants.js';
+import { Utils } from '../shared/utils.js';
 
-// Optimized Unified Blocker with performance improvements
 class UnifiedBlocker
 {
     constructor()
@@ -17,74 +18,85 @@ class UnifiedBlocker
         this.debounceTimers = new Map();
         this.mutationObserver = null;
 
-        // Whitelist of domains to skip
-        this.whitelist = new Set([
-            'chrome.google.com',
-            'addons.mozilla.org',
-            'microsoftedge.microsoft.com',
-            'chrome-extension',
-            'moz-extension',
-            'edge-extension'
+        // Critical keywords for immediate blocking
+        this.criticalKeywords = new Set([
+            'porn', 'xxx', 'sex', 'adult', 'nude', 'naked', 'explicit', 'erotic'
         ]);
 
-        // Initialize
         this.init();
     }
 
     async init()
     {
-        // Skip if already on blocked page or extension pages
-        if (window.location.href.includes('chrome-extension://') ||
-            window.location.href.includes('moz-extension://') ||
-            window.location.href.includes('edge-extension://') ||
-            window.location.href.includes('blocked.html'))
+        // Skip extension pages and whitelisted domains
+        if (this.shouldSkipPage())
         {
             return;
         }
 
-        // Skip initialization for whitelisted domains
-        const hostname = window.location.hostname;
-        if (this.isWhitelisted(hostname))
-        {
-            console.log('Skipping initialization for whitelisted domain:', hostname);
-            return;
-        }
+        // Immediate check for critical content
+        this.performImmediateCheck();
 
-        // Load settings lazily
+        // Load settings and setup monitoring
         await this.loadSettings();
-
-        // Check current page immediately
         this.checkCurrentPage();
-
-        // Defer non-critical monitoring
-        if (typeof requestIdleCallback !== 'undefined')
-        {
-            requestIdleCallback(() =>
-            {
-                this.setupMonitoring();
-            }, { timeout: 2000 });
-        } else
-        {
-            // Fallback for browsers without requestIdleCallback
-            setTimeout(() =>
-            {
-                this.setupMonitoring();
-            }, 100);
-        }
+        this.deferredSetup();
 
         this.initialized = true;
     }
 
-    isWhitelisted(hostname)
+    shouldSkipPage()
     {
-        for (const domain of this.whitelist)
+        const url = window.location.href;
+        const hostname = window.location.hostname;
+
+        // Skip extension pages
+        if (Utils.isExtensionUrl(url) || url.includes('blocked.html'))
         {
-            if (hostname.includes(domain))
+            return true;
+        }
+
+        // Skip whitelisted domains
+        return WHITELIST_DOMAINS.some(domain => hostname.includes(domain));
+    }
+
+    performImmediateCheck()
+    {
+        // Quick check for Google search with critical keywords
+        if (window.location.hostname.includes('google.com') &&
+            window.location.pathname.includes('/search'))
+        {
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const searchQuery = urlParams.get('q');
+
+            if (searchQuery)
             {
-                return true;
+                const lowerQuery = searchQuery.toLowerCase();
+                for (const keyword of this.criticalKeywords)
+                {
+                    if (lowerQuery.includes(keyword))
+                    {
+                        this.immediateRedirect(BLOCKED_REASONS.SEARCH, null, searchQuery, keyword);
+                        return;
+                    }
+                }
             }
         }
-        return false;
+    }
+
+    immediateRedirect(reason, domain = null, url = null, keyword = null)
+    {
+        // Stop page loading
+        if (window.stop) window.stop();
+
+        // Basic redirect construction (fallback)
+        let redirectUrl = '/blocked.html?reason=' + reason;
+        if (domain) redirectUrl += '&domain=' + encodeURIComponent(domain);
+        if (url) redirectUrl += '&url=' + encodeURIComponent(url);
+        if (keyword) redirectUrl += '&keyword=' + encodeURIComponent(keyword);
+
+        window.location.replace(redirectUrl);
     }
 
     async loadSettings()
@@ -106,9 +118,9 @@ class UnifiedBlocker
             console.log(`Loaded settings: ${this.blockedKeywords.size} keywords, ${this.blockedDomains.size + this.customDomains.size} domains`);
         } catch (error)
         {
-            console.log('Failed to load settings:', error);
-            // Use default keywords as fallback
-            this.blockedKeywords = new Set(['porn', 'xxx', 'sex', 'adult', 'nude', 'naked', 'explicit', 'erotic']);
+            console.log('Failed to load settings, using defaults:', error);
+            // Use critical keywords as fallback
+            this.blockedKeywords = new Set([...this.criticalKeywords]);
         }
     }
 
@@ -122,7 +134,7 @@ class UnifiedBlocker
         // Check domain blocking
         if (this.isDomainBlocked(hostname))
         {
-            this.redirectToBlockedPage('domain', hostname);
+            this.redirectToBlockedPage(BLOCKED_REASONS.DOMAIN, hostname);
             return;
         }
 
@@ -130,21 +142,20 @@ class UnifiedBlocker
         const blockedKeyword = this.containsBlockedKeywords(fullUrl);
         if (blockedKeyword)
         {
-            this.redirectToBlockedPage('keyword', null, fullUrl, blockedKeyword);
+            this.redirectToBlockedPage(BLOCKED_REASONS.KEYWORD, null, fullUrl, blockedKeyword);
             return;
         }
 
-        // Check Google search queries
-        if (hostname.includes('google.com') && window.location.pathname.includes('/search'))
+        // Check search queries
+        if (this.isSearchEngine(hostname) && window.location.pathname.includes('/search'))
         {
-            const urlParams = new URLSearchParams(window.location.search);
-            const searchQuery = urlParams.get('q');
-            if (searchQuery)
+            const query = this.extractSearchQuery();
+            if (query)
             {
-                const keyword = this.containsBlockedKeywords(searchQuery);
+                const keyword = this.containsBlockedKeywords(query);
                 if (keyword)
                 {
-                    this.redirectToBlockedPage('search', null, searchQuery, keyword);
+                    this.redirectToBlockedPage(BLOCKED_REASONS.SEARCH, null, query, keyword);
                     return;
                 }
             }
@@ -155,13 +166,13 @@ class UnifiedBlocker
     {
         if (!this.isActive) return false;
 
-        // Direct lookup first (fastest)
+        // Direct lookup first
         if (this.customDomains.has(hostname) || this.blockedDomains.has(hostname))
         {
             return true;
         }
 
-        // Check subdomains (slower, so do it second)
+        // Check parent domains
         const hostParts = hostname.split('.');
         for (let i = 1; i < hostParts.length; i++)
         {
@@ -178,9 +189,8 @@ class UnifiedBlocker
     containsBlockedKeywords(text)
     {
         if (!this.isActive || !text) return false;
-        const lowerText = text.toLowerCase();
 
-        // Use for...of for better performance with early return
+        const lowerText = text.toLowerCase();
         for (const keyword of this.blockedKeywords)
         {
             if (lowerText.includes(keyword.toLowerCase()))
@@ -191,23 +201,29 @@ class UnifiedBlocker
         return false;
     }
 
+    isSearchEngine(hostname)
+    {
+        return SEARCH_ENGINES.some(engine => hostname.includes(engine));
+    }
+
+    extractSearchQuery()
+    {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('q') || urlParams.get('query') || urlParams.get('search');
+    }
+
     async redirectToBlockedPage(reason, domain = null, url = null, keyword = null)
     {
-        // Stop page loading immediately
-        if (window.stop)
-        {
-            window.stop();
-        }
+        if (window.stop) window.stop();
 
         try
         {
-            // Get blocked page URL from background script
             const response = await chrome.runtime.sendMessage({
                 action: 'getBlockedPageUrl',
-                reason: reason,
-                domain: domain,
-                url: url,
-                keyword: keyword
+                reason,
+                domain,
+                url,
+                keyword
             });
 
             if (response && response.blockedUrl)
@@ -215,47 +231,48 @@ class UnifiedBlocker
                 window.location.replace(response.blockedUrl);
             } else
             {
-                // Fallback - construct URL manually
-                let blockedUrl = '/blocked.html?reason=' + reason;
-                if (domain) blockedUrl += '&domain=' + encodeURIComponent(domain);
-                if (url) blockedUrl += '&url=' + encodeURIComponent(url);
-                if (keyword) blockedUrl += '&keyword=' + encodeURIComponent(keyword);
-
-                window.location.replace(blockedUrl);
+                this.immediateRedirect(reason, domain, url, keyword);
             }
         } catch (error)
         {
-            console.error('Failed to redirect to blocked page:', error);
-            // Final fallback
-            window.location.replace('/blocked.html');
+            console.error('Failed to get blocked page URL:', error);
+            this.immediateRedirect(reason, domain, url, keyword);
+        }
+    }
+
+    deferredSetup()
+    {
+        if (typeof requestIdleCallback !== 'undefined')
+        {
+            requestIdleCallback(() =>
+            {
+                this.setupMonitoring();
+            }, { timeout: 2000 });
+        } else
+        {
+            setTimeout(() =>
+            {
+                this.setupMonitoring();
+            }, 100);
         }
     }
 
     setupMonitoring()
     {
-        // Optimized MutationObserver with specific config
-        this.setupOptimizedMutationObserver();
-
-        // Monitor history API changes
+        this.setupMutationObserver();
         this.setupHistoryMonitoring();
-
-        // Monitor link clicks with delegation
         this.setupLinkMonitoring();
-
-        // Monitor form submissions
         this.setupFormMonitoring();
 
-        // Special handling for search engines
-        if (this.isSearchEngine())
+        if (this.isSearchEngine(window.location.hostname))
         {
             this.setupSearchInterception();
         }
     }
 
-    setupOptimizedMutationObserver()
+    setupMutationObserver()
     {
-        // Use debounced observer for better performance
-        const debouncedCheck = this.debounce(() =>
+        const debouncedCheck = Utils.debounce(() =>
         {
             const url = location.href;
             if (url !== this.lastUrl)
@@ -265,14 +282,13 @@ class UnifiedBlocker
             }
         }, 200);
 
-        // Only observe body with minimal config
         const targetNode = document.body;
         if (targetNode)
         {
             this.mutationObserver = new MutationObserver(debouncedCheck);
             this.mutationObserver.observe(targetNode, {
                 childList: true,
-                subtree: false, // Don't observe entire subtree for performance
+                subtree: false,
                 attributes: false,
                 characterData: false
             });
@@ -281,10 +297,9 @@ class UnifiedBlocker
 
     setupHistoryMonitoring()
     {
-        // Wrap history methods
         const originalPushState = history.pushState;
         const originalReplaceState = history.replaceState;
-        const debouncedCheck = this.debounce(() => this.checkCurrentPage(), 100);
+        const debouncedCheck = Utils.debounce(() => this.checkCurrentPage(), 100);
 
         history.pushState = function ()
         {
@@ -298,27 +313,22 @@ class UnifiedBlocker
             debouncedCheck();
         };
 
-        // Monitor popstate
         window.addEventListener('popstate', debouncedCheck);
     }
 
     setupLinkMonitoring()
     {
-        // Use event delegation for better performance
         document.addEventListener('click', async (e) =>
         {
-            // Find closest link element
             const link = e.target.closest('a');
             if (!link || !link.href) return;
 
-            // Skip internal links
             if (link.href.startsWith('#') || link.href.startsWith('javascript:')) return;
 
             try
             {
                 const url = new URL(link.href);
 
-                // Quick check for blocked content
                 if (this.isDomainBlocked(url.hostname) || this.containsBlockedKeywords(link.href))
                 {
                     e.preventDefault();
@@ -326,7 +336,7 @@ class UnifiedBlocker
                     e.stopImmediatePropagation();
 
                     await this.redirectToBlockedPage(
-                        this.isDomainBlocked(url.hostname) ? 'domain' : 'keyword',
+                        this.isDomainBlocked(url.hostname) ? BLOCKED_REASONS.DOMAIN : BLOCKED_REASONS.KEYWORD,
                         url.hostname,
                         link.href
                     );
@@ -335,17 +345,15 @@ class UnifiedBlocker
             {
                 // Invalid URL, ignore
             }
-        }, true); // Use capture phase for earlier interception
+        }, true);
     }
 
     setupFormMonitoring()
     {
-        // Monitor form submissions with delegation
         document.addEventListener('submit', async (e) =>
         {
             const form = e.target;
 
-            // Check search-related inputs
             const searchSelectors = [
                 'input[type="search"]',
                 'input[name*="search"]',
@@ -367,23 +375,15 @@ class UnifiedBlocker
                     e.stopPropagation();
                     e.stopImmediatePropagation();
 
-                    await this.redirectToBlockedPage('search', null, input.value, blockedKeyword);
+                    await this.redirectToBlockedPage(BLOCKED_REASONS.SEARCH, null, input.value, blockedKeyword);
                     return;
                 }
             }
         }, true);
     }
 
-    isSearchEngine()
-    {
-        const hostname = window.location.hostname;
-        const searchEngines = ['google.com', 'bing.com', 'duckduckgo.com', 'yahoo.com', 'baidu.com', 'yandex'];
-        return searchEngines.some(engine => hostname.includes(engine));
-    }
-
     setupSearchInterception()
     {
-        // Find search input with multiple selectors
         const searchSelectors = [
             'input[name="q"]',
             'input#search',
@@ -396,8 +396,8 @@ class UnifiedBlocker
         const searchInput = document.querySelector(searchSelectors.join(','));
         if (!searchInput) return;
 
-        // Visual feedback for blocked keywords
-        const checkInput = this.debounce((e) =>
+        // Visual feedback
+        const checkInput = Utils.debounce((e) =>
         {
             const blockedKeyword = this.containsBlockedKeywords(e.target.value);
             if (blockedKeyword)
@@ -415,7 +415,7 @@ class UnifiedBlocker
 
         searchInput.addEventListener('input', checkInput);
 
-        // Prevent submission of blocked searches
+        // Prevent blocked searches
         searchInput.addEventListener('keydown', async (e) =>
         {
             if (e.key === 'Enter' && e.target.getAttribute('data-blocked') === 'true')
@@ -423,11 +423,11 @@ class UnifiedBlocker
                 e.preventDefault();
                 e.stopPropagation();
                 const blockedKeyword = this.containsBlockedKeywords(e.target.value);
-                await this.redirectToBlockedPage('search', null, e.target.value, blockedKeyword);
+                await this.redirectToBlockedPage(BLOCKED_REASONS.SEARCH, null, e.target.value, blockedKeyword);
             }
         });
 
-        // Also monitor the search button if exists
+        // Monitor search button
         const searchButton = document.querySelector('button[type="submit"], input[type="submit"], button[aria-label*="search" i]');
         if (searchButton)
         {
@@ -438,56 +438,34 @@ class UnifiedBlocker
                     e.preventDefault();
                     e.stopPropagation();
                     const blockedKeyword = this.containsBlockedKeywords(searchInput.value);
-                    await this.redirectToBlockedPage('search', null, searchInput.value, blockedKeyword);
+                    await this.redirectToBlockedPage(BLOCKED_REASONS.SEARCH, null, searchInput.value, blockedKeyword);
                 }
             });
         }
     }
 
-    debounce(func, wait)
-    {
-        return (...args) =>
-        {
-            const key = func.toString();
-            clearTimeout(this.debounceTimers.get(key));
-
-            const timeout = setTimeout(() =>
-            {
-                this.debounceTimers.delete(key);
-                func.apply(this, args);
-            }, wait);
-
-            this.debounceTimers.set(key, timeout);
-        };
-    }
-
-    // Cleanup method to prevent memory leaks
     destroy()
     {
-        // Disconnect mutation observer
         if (this.mutationObserver)
         {
             this.mutationObserver.disconnect();
             this.mutationObserver = null;
         }
 
-        // Clear all timers
         for (const timer of this.debounceTimers.values())
         {
             clearTimeout(timer);
         }
         this.debounceTimers.clear();
 
-        // Clear data
         this.blockedKeywords.clear();
         this.blockedDomains.clear();
         this.customDomains.clear();
     }
 }
 
-// Initialize with performance tracking
+// Initialize
 let unifiedBlocker;
-const initStartTime = performance.now();
 
 function initialize()
 {
@@ -496,39 +474,10 @@ function initialize()
         if (!unifiedBlocker)
         {
             unifiedBlocker = new UnifiedBlocker();
-            const initTime = performance.now() - initStartTime;
-            console.log(`Unified blocker initialized in ${initTime.toFixed(2)}ms`);
         }
     } catch (error)
     {
         console.error('Failed to initialize unified blocker:', error);
-    }
-}
-
-// Immediate check for Google search results (highest priority)
-if (window.location.hostname.includes('google.com') && window.location.pathname.includes('/search'))
-{
-    const urlParams = new URLSearchParams(window.location.search);
-    const searchQuery = urlParams.get('q');
-    if (searchQuery)
-    {
-        // Use minimal keyword set for immediate blocking
-        const criticalKeywords = ['porn', 'xxx', 'sex', 'adult', 'nude', 'naked', 'explicit', 'erotic'];
-        const lowerQuery = searchQuery.toLowerCase();
-
-        for (const keyword of criticalKeywords)
-        {
-            if (lowerQuery.includes(keyword))
-            {
-                // Stop page immediately
-                if (window.stop) window.stop();
-
-                // Use basic redirect since we can't easily access chrome.runtime.getURL here
-                window.location.replace('/blocked.html?reason=search&keyword=' +
-                    encodeURIComponent(keyword) + '&query=' + encodeURIComponent(searchQuery));
-                break;
-            }
-        }
     }
 }
 
@@ -550,7 +499,7 @@ setTimeout(() =>
     }
 }, 50);
 
-// Cleanup on page unload to prevent memory leaks
+// Cleanup on unload
 window.addEventListener('unload', () =>
 {
     if (unifiedBlocker)

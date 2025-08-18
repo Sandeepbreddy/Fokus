@@ -1,0 +1,70 @@
+{
+    "supabase": {
+        "url": "https://yttqdipplhudnxrasbtm.supabase.co",
+        "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0dHFkaXBwbGh1ZG54cmFzYnRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxODc4MTQsImV4cCI6MjA3MDc2MzgxNH0.y4HdO-2XsVTORKz5WqFwPXg0rJ_zfOBYt7UjHlq96xE",
+        "projectName": "Fokus",
+        "region": "us-east-2",
+        "version": "1.0.0"
+    },
+    "app": {
+        "name": "Fokus",
+        "version": "1.0.0",
+        "description": "Content blocking extension with cloud sync",
+        "supportEmail": "support@fokus-extension.com",
+        "homepage": "https://fokus-extension.com",
+        "privacyPolicy": "https://fokus-extension.com/privacy",
+        "termsOfService": "https://fokus-extension.com/terms"
+    },
+    "features": {
+        "cloudSync": true,
+        "cloudBackups": true,
+        "autoSync": true,
+        "defaultSyncInterval": 300000,
+        "maxBackups": 50,
+        "offlineMode": true,
+        "exportImport": true,
+        "analytics": false,
+        "telemetry": false
+    },
+    "limits": {
+        "maxKeywords": 1000,
+        "maxCustomDomains": 500,
+        "maxBlocklists": 20,
+        "maxErrorLogs": 50,
+        "cacheExpiry": 3600000,
+        "syncTimeout": 30000
+    },
+    "defaultSettings": {
+        "pin": "1234",
+        "isActive": true,
+        "theme": "default",
+        "notifications": true,
+        "autoUpdate": true,
+        "strictMode": false
+    },
+    "security": {
+        "pinRequired": true,
+        "sessionTimeout": 86400000,
+        "encryptBackups": false,
+        "requireHttps": true
+    },
+    "development": {
+        "debugMode": false,
+        "logLevel": "info",
+        "mockData": false,
+        "skipValidation": false
+    },
+    "urls": {
+        "safeHomepage": "https://www.google.com",
+        "supportUrl": "https://fokus-extension.com/support",
+        "documentationUrl": "https://fokus-extension.com/docs",
+        "feedbackUrl": "https://fokus-extension.com/feedback"
+    },
+    "blocklists": {
+        "updateInterval": 86400000,
+        "maxConcurrentFetches": 3,
+        "retryAttempts": 3,
+        "timeout": 30000,
+        "userAgent": "Mozilla/5.0 (compatible; Fokus-Extension/1.0.0)"
+    }
+}

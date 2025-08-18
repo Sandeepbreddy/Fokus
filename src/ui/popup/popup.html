@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fokus - Content Blocker</title>
+    <link rel="stylesheet" href="../../styles/popup.css">
+</head>
+
+<body>
+    <div class="popup-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">🛡️</div>
+            <div class="title">Fokus</div>
+            <div class="subtitle">Your Focus & Productivity Guardian</div>
+        </div>
+
+        <!-- Loading State -->
+        <div class="loading" id="loading-state">
+            <div class="loading-spinner">⏳</div>
+            <div>Initializing...</div>
+        </div>
+
+        <!-- Authentication Section -->
+        <div class="auth-section" id="auth-section">
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="signin-tab">Sign In</button>
+                <button class="auth-tab" id="signup-tab">Sign Up</button>
+            </div>
+
+            <!-- Sign In Form -->
+            <div class="auth-form active" id="signin-form">
+                <div class="form-group">
+                    <label for="signin-email">Email</label>
+                    <input type="email" id="signin-email" placeholder="your@email.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="signin-password">Password</label>
+                    <input type="password" id="signin-password" placeholder="Your password" required>
+                </div>
+                <button class="btn btn-primary" id="signin-btn">Sign In</button>
+                <button class="btn btn-secondary" id="offline-mode-btn">Use Offline Mode</button>
+                <div id="signin-message"></div>
+            </div>
+
+            <!-- Sign Up Form -->
+            <div class="auth-form" id="signup-form">
+                <div class="form-group">
+                    <label for="signup-email">Email</label>
+                    <input type="email" id="signup-email" placeholder="your@email.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="signup-password">Password</label>
+                    <input type="password" id="signup-password" placeholder="At least 6 characters" required>
+                </div>
+                <div class="form-group">
+                    <label for="signup-confirm">Confirm Password</label>
+                    <input type="password" id="signup-confirm" placeholder="Confirm password" required>
+                </div>
+                <button class="btn btn-primary" id="signup-btn">Create Account</button>
+                <div id="signup-message"></div>
+            </div>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div class="dashboard-section" id="dashboard-section">
+            <!-- User Info -->
+            <div class="user-info">
+                <div class="user-email" id="user-email">user@example.com</div>
+                <div class="connection-status">✅ Connected to cloud</div>
+            </div>
+
+            <!-- Protection Toggle -->
+            <div class="protection-toggle">
+                <span class="toggle-text" id="protection-status">Protection Active</span>
+                <div class="toggle active" id="protection-toggle">
+                    <div class="toggle-slider"></div>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="blocks-today">0</div>
+                    <div class="stat-label">Blocks Today</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="focus-streak">0</div>
+                    <div class="stat-label">Day Streak</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="total-domains">0</div>
+                    <div class="stat-label">Domains</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="time-saved">0h</div>
+                    <div class="stat-label">Time Saved</div>
+                </div>
+            </div>
+
+            <!-- Current Site -->
+            <div class="current-site">
+                <div class="site-label">Current Site:</div>
+                <div class="site-url" id="current-url">Loading...</div>
+                <button class="btn btn-secondary" id="block-current-site">Block This Site</button>
+            </div>
+
+            <!-- Actions -->
+            <div class="actions">
+                <button class="btn btn-primary" id="open-settings">⚙️ Settings & Configuration</button>
+                <button class="btn btn-secondary" id="sync-now">🔄 Sync Now</button>
+                <button class="btn btn-secondary" id="sign-out-btn">🚪 Sign Out</button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer-info">
+            <div>Fokus v1.0.0 • Keep your focus, achieve your goals</div>
+        </div>
+    </div>
+
+    <script type="module" src="popup.js"></script>
+</body>
+
+</html>

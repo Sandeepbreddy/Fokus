@@ -15,7 +15,7 @@
         "*://*/*"
     ],
     "background": {
-        "service_worker": "background.js",
+        "service_worker": "src/background/main.js",
         "type": "module"
     },
     "content_scripts": [
@@ -24,30 +24,28 @@
                 "*://*/*"
             ],
             "js": [
-                "unified-content.js"
+                "src/content/unified-blocker.js"
             ],
             "run_at": "document_start"
         }
     ],
     "action": {
-        "default_popup": "popup.html",
+        "default_popup": "src/ui/popup/popup.html",
         "default_title": "Fokus - Content Blocker"
     },
-    "options_page": "options.html",
+    "options_page": "src/ui/options/options.html",
     "options_ui": {
-        "page": "options.html",
+        "page": "src/ui/options/options.html",
         "open_in_tab": true
     },
     "web_accessible_resources": [
         {
             "resources": [
-                "blocked.html",
-                "blocked.js",
-                "options.html",
-                "options.js",
-                "options-core.js",
-                "config.json",
-                "supabase-client.js"
+                "src/ui/blocked/blocked.html",
+                "src/ui/blocked/blocked.js",
+                "src/ui/options/options.html",
+                "src/services/supabase-client.js",
+                "config/config.json"
             ],
             "matches": [
                 "*://*/*"
@@ -58,8 +56,8 @@
         "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'self'; connect-src 'self' https://*.supabase.co https://raw.githubusercontent.com;"
     },
     "icons": {
-        "16": "icons/icon16.png",
-        "48": "icons/icon48.png",
-        "128": "icons/icon128.png"
+        "16": "assets/icons/icon16.png",
+        "48": "assets/icons/icon48.png",
+        "128": "assets/icons/icon128.png"
     }
 }

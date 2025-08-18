@@ -1,5 +1,4 @@
-/* options.css - Improved styling with better layouts */
-
+/* src/styles/options.css - Options page styling */
 * {
     margin: 0;
     padding: 0;
@@ -20,6 +19,7 @@ body {
     padding: 20px;
 }
 
+/* Header */
 .header {
     text-align: center;
     color: white;
@@ -39,6 +39,7 @@ body {
     opacity: 0.9;
 }
 
+/* Settings Grid */
 .settings-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
@@ -46,6 +47,7 @@ body {
     margin-bottom: 30px;
 }
 
+/* Cards */
 .card {
     background: rgba(255, 255, 255, 0.95);
     border-radius: 20px;
@@ -78,6 +80,14 @@ body {
     margin-bottom: 15px;
 }
 
+.description {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 15px;
+    line-height: 1.5;
+}
+
+/* Statistics Overview */
 .stats-overview {
     background: rgba(255, 255, 255, 0.95);
     border-radius: 20px;
@@ -120,6 +130,7 @@ body {
     font-weight: 500;
 }
 
+/* Form Elements */
 .form-group {
     margin-bottom: 18px;
 }
@@ -183,6 +194,7 @@ body {
     box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
 }
 
+/* Buttons */
 .btn {
     background: linear-gradient(135deg, #4CAF50, #45a049);
     color: white;
@@ -247,6 +259,14 @@ body {
 
 .btn-info:hover {
     box-shadow: 0 6px 20px rgba(23, 162, 184, 0.3);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #28a745, #20c997);
+}
+
+.btn-success:hover {
+    box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
 }
 
 .btn-group {
@@ -325,6 +345,13 @@ body {
     color: #666;
     font-style: italic;
     padding: 30px;
+}
+
+.loading {
+    text-align: center;
+    color: #666;
+    font-style: italic;
+    padding: 20px;
 }
 
 /* Domain list styling */
@@ -428,10 +455,13 @@ body {
 
 .blocklist-actions {
     display: flex;
-    gap: 6px;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
     margin-top: 10px;
 }
 
+/* PIN Section */
 .pin-section {
     background: linear-gradient(135deg, #f8f9fa, #e9ecef);
     border-radius: 12px;
@@ -447,6 +477,7 @@ body {
     font-weight: 600;
 }
 
+/* Info Boxes */
 .warning-box {
     background: linear-gradient(135deg, #fff3cd, #ffeaa7);
     color: #856404;
@@ -472,6 +503,15 @@ body {
     text-align: center;
 }
 
+.info-box div {
+    margin-bottom: 5px;
+}
+
+.info-box div:last-child {
+    margin-bottom: 0;
+}
+
+/* Footer */
 .footer {
     text-align: center;
     color: white;
@@ -570,6 +610,82 @@ body {
     }
 }
 
+/* Error page styles */
+.error-page {
+    padding: 40px;
+    text-align: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: white;
+    font-family: 'Segoe UI', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.error-container {
+    max-width: 600px;
+    background: rgba(255, 255, 255, 0.95);
+    color: #333;
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.error-container h1 {
+    color: #e74c3c;
+    margin-bottom: 20px;
+}
+
+.error-container ul {
+    text-align: left;
+    margin: 20px 0;
+    line-height: 1.8;
+}
+
+.error-actions {
+    margin: 30px 0;
+}
+
+.error-actions .btn {
+    margin: 5px;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.error-details {
+    text-align: left;
+    margin-top: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.error-details pre {
+    font-size: 12px;
+    color: #666;
+    white-space: pre-wrap;
+    margin-top: 10px;
+}
+
+.highlight {
+    animation: highlight 2s ease-out;
+}
+
+@keyframes highlight {
+    0% {
+        background-color: rgba(76, 175, 80, 0.3);
+    }
+
+    100% {
+        background-color: transparent;
+    }
+}
+
 /* Scrollbar Styling */
 .keywords-container::-webkit-scrollbar,
 .list-container::-webkit-scrollbar {
@@ -633,6 +749,18 @@ body {
     .btn {
         width: 100%;
         margin-right: 0;
+    }
+
+    .blocklist-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .blocklist-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
     }
 }
 

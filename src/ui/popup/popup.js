@@ -1,21 +1,26 @@
-// popup.js - Optimized Fokus Popup with performance improvements
+// src/ui/popup/popup.js - Popup UI controller
+import { Utils } from '../../shared/utils.js';
+import { Logger } from '../../shared/logger.js';
+import { TIMEOUTS } from '../../shared/constants.js';
 
-class FokusPopup
+class PopupController
 {
     constructor()
     {
+        this.logger = new Logger('PopupController');
         this.currentUser = null;
         this.isAuthenticated = false;
         this.isOfflineMode = false;
         this.statsCache = null;
-        this.cacheTimeout = 10000; // 10 seconds cache
+        this.cacheTimeout = TIMEOUTS.CACHE_TIMEOUT;
         this.lastCacheTime = 0;
+
         this.init();
     }
 
     async init()
     {
-        console.log('Initializing Fokus popup...');
+        this.logger.info('Initializing popup...');
         const startTime = performance.now();
 
         try
@@ -24,10 +29,10 @@ class FokusPopup
             await this.checkAuthStatus();
 
             const initTime = performance.now() - startTime;
-            console.log(`Popup initialized in ${initTime.toFixed(2)}ms`);
+            this.logger.debug(`Popup initialized in ${initTime.toFixed(2)}ms`);
         } catch (error)
         {
-            console.error('Failed to initialize popup:', error);
+            this.logger.error('Failed to initialize popup:', error);
             this.showError('Failed to initialize. Please refresh.');
         }
     }
@@ -35,42 +40,57 @@ class FokusPopup
     setupEventListeners()
     {
         // Auth tab switching
-        document.getElementById('signin-tab')?.addEventListener('click', () => this.switchAuthTab('signin'));
-        document.getElementById('signup-tab')?.addEventListener('click', () => this.switchAuthTab('signup'));
+        this.addClickListener('signin-tab', () => this.switchAuthTab('signin'));
+        this.addClickListener('signup-tab', () => this.switchAuthTab('signup'));
 
         // Auth actions
-        document.getElementById('signin-btn')?.addEventListener('click', () => this.signIn());
-        document.getElementById('signup-btn')?.addEventListener('click', () => this.signUp());
-        document.getElementById('offline-mode-btn')?.addEventListener('click', () => this.enableOfflineMode());
+        this.addClickListener('signin-btn', () => this.signIn());
+        this.addClickListener('signup-btn', () => this.signUp());
+        this.addClickListener('offline-mode-btn', () => this.enableOfflineMode());
 
         // Dashboard actions
-        document.getElementById('open-settings')?.addEventListener('click', () => this.openSettings());
-        document.getElementById('sync-now')?.addEventListener('click', () => this.syncNow());
-        document.getElementById('sign-out-btn')?.addEventListener('click', () => this.signOut());
-        document.getElementById('block-current-site')?.addEventListener('click', () => this.blockCurrentSite());
-        document.getElementById('protection-toggle')?.addEventListener('click', () => this.toggleProtection());
+        this.addClickListener('open-settings', () => this.openSettings());
+        this.addClickListener('sync-now', () => this.syncNow());
+        this.addClickListener('sign-out-btn', () => this.signOut());
+        this.addClickListener('block-current-site', () => this.blockCurrentSite());
+        this.addClickListener('protection-toggle', () => this.toggleProtection());
 
         // Enter key handlers
-        document.getElementById('signin-password')?.addEventListener('keypress', (e) =>
+        this.addKeyListener('signin-password', 'Enter', () => this.signIn());
+        this.addKeyListener('signup-confirm', 'Enter', () => this.signUp());
+    }
+
+    addClickListener(id, handler)
+    {
+        const element = document.getElementById(id);
+        if (element)
         {
-            if (e.key === 'Enter') this.signIn();
-        });
-        document.getElementById('signup-confirm')?.addEventListener('keypress', (e) =>
+            element.addEventListener('click', handler);
+        }
+    }
+
+    addKeyListener(id, key, handler)
+    {
+        const element = document.getElementById(id);
+        if (element)
         {
-            if (e.key === 'Enter') this.signUp();
-        });
+            element.addEventListener('keypress', (e) =>
+            {
+                if (e.key === key) handler();
+            });
+        }
     }
 
     async checkAuthStatus()
     {
-        console.log('Checking authentication status...');
+        this.logger.debug('Checking authentication status...');
+
         try
         {
             const response = await this.sendMessage({ action: 'getAuthStatus' });
 
             if (response && response.isAuthenticated)
             {
-                console.log('User is authenticated');
                 this.currentUser = response.user;
                 this.isAuthenticated = true;
                 this.isOfflineMode = response.isOfflineMode || false;
@@ -81,19 +101,17 @@ class FokusPopup
                 const offlineData = await chrome.storage.local.get(['offlineMode', 'offlineExpiry']);
                 if (offlineData.offlineMode && offlineData.offlineExpiry > Date.now())
                 {
-                    console.log('Using offline mode');
                     this.isOfflineMode = true;
                     this.currentUser = { email: offlineData.offlineEmail || 'offline@mode.local' };
                     this.showDashboard();
                 } else
                 {
-                    console.log('User not authenticated, showing auth form');
                     this.showAuthentication();
                 }
             }
         } catch (error)
         {
-            console.error('Auth check failed:', error);
+            this.logger.error('Auth check failed:', error);
             this.showAuthentication();
         } finally
         {
@@ -103,34 +121,35 @@ class FokusPopup
 
     showLoading()
     {
-        document.getElementById('loading-state').style.display = 'block';
-        document.getElementById('auth-section').style.display = 'none';
-        document.getElementById('dashboard-section').style.display = 'none';
+        this.setElementDisplay('loading-state', 'block');
+        this.setElementDisplay('auth-section', 'none');
+        this.setElementDisplay('dashboard-section', 'none');
     }
 
     hideLoading()
     {
-        document.getElementById('loading-state').style.display = 'none';
+        this.setElementDisplay('loading-state', 'none');
     }
 
     showAuthentication()
     {
-        document.getElementById('auth-section').style.display = 'flex';
-        document.getElementById('dashboard-section').style.display = 'none';
-        document.getElementById('dashboard-section').classList.remove('active');
+        this.setElementDisplay('auth-section', 'flex');
+        this.setElementDisplay('dashboard-section', 'none');
+        this.removeClass('dashboard-section', 'active');
 
         // Focus email input
         setTimeout(() =>
         {
-            document.getElementById('signin-email')?.focus();
+            const emailInput = document.getElementById('signin-email');
+            if (emailInput) emailInput.focus();
         }, 100);
     }
 
     showDashboard()
     {
-        document.getElementById('auth-section').style.display = 'none';
-        document.getElementById('dashboard-section').style.display = 'flex';
-        document.getElementById('dashboard-section').classList.add('active');
+        this.setElementDisplay('auth-section', 'none');
+        this.setElementDisplay('dashboard-section', 'flex');
+        this.addClass('dashboard-section', 'active');
 
         this.loadDashboardData();
     }
@@ -140,17 +159,20 @@ class FokusPopup
         try
         {
             // Update user info
+            const userEmailEl = document.getElementById('user-email');
+            const statusEl = document.querySelector('.connection-status');
+
             if (this.isOfflineMode)
             {
-                document.getElementById('user-email').textContent = this.currentUser?.email || 'Offline Mode';
-                document.querySelector('.connection-status').textContent = '⚠️ Working offline';
+                this.setElementText('user-email', this.currentUser?.email || 'Offline Mode');
+                this.setElementText('.connection-status', '⚠️ Working offline');
             } else if (this.currentUser)
             {
-                document.getElementById('user-email').textContent = this.currentUser.email;
-                document.querySelector('.connection-status').textContent = '✅ Connected to cloud';
+                this.setElementText('user-email', this.currentUser.email);
+                this.setElementText('.connection-status', '✅ Connected to cloud');
             }
 
-            // Load all data in parallel
+            // Load data in parallel
             await Promise.all([
                 this.loadCurrentSite(),
                 this.loadStats(),
@@ -158,7 +180,7 @@ class FokusPopup
             ]);
         } catch (error)
         {
-            console.error('Failed to load dashboard data:', error);
+            this.logger.error('Failed to load dashboard data:', error);
         }
     }
 
@@ -166,7 +188,7 @@ class FokusPopup
     {
         try
         {
-            // Check if we have recent cache
+            // Check cache
             if (this.statsCache && (Date.now() - this.lastCacheTime) < this.cacheTimeout)
             {
                 this.updateStatsUI(this.statsCache);
@@ -178,15 +200,12 @@ class FokusPopup
                 'blocksToday', 'focusStreak', 'customDomains', 'blockedDomains', 'totalBlocks'
             ]);
 
-            // Cache the data
             this.statsCache = data;
             this.lastCacheTime = Date.now();
-
             this.updateStatsUI(data);
         } catch (error)
         {
-            console.error('Failed to load stats:', error);
-            // Show defaults if error
+            this.logger.error('Failed to load stats:', error);
             this.updateStatsUI({
                 blocksToday: 0,
                 focusStreak: 0,
@@ -199,14 +218,14 @@ class FokusPopup
 
     updateStatsUI(data)
     {
-        document.getElementById('blocks-today').textContent = data.blocksToday || 0;
-        document.getElementById('focus-streak').textContent = data.focusStreak || 0;
+        this.setElementText('blocks-today', data.blocksToday || 0);
+        this.setElementText('focus-streak', data.focusStreak || 0);
 
         const totalDomains = (data.customDomains?.length || 0) + (data.blockedDomains?.length || 0);
-        document.getElementById('total-domains').textContent = totalDomains.toLocaleString();
+        this.setElementText('total-domains', totalDomains.toLocaleString());
 
-        const estimatedHours = Math.floor((data.totalBlocks || 0) * 2 / 60);
-        document.getElementById('time-saved').textContent = estimatedHours > 0 ? `${estimatedHours}h` : '0h';
+        const estimatedTime = Utils.estimateTimeSaved(data.totalBlocks || 0);
+        this.setElementText('time-saved', estimatedTime);
     }
 
     async loadCurrentSite()
@@ -216,21 +235,15 @@ class FokusPopup
             const response = await this.sendMessage({ action: 'getCurrentTab' });
             if (response && response.url)
             {
-                try
-                {
-                    const url = new URL(response.url);
-                    document.getElementById('current-url').textContent = url.hostname;
-                } catch
-                {
-                    document.getElementById('current-url').textContent = 'Unable to detect';
-                }
+                const hostname = Utils.sanitizeUrl(response.url);
+                this.setElementText('current-url', hostname);
             } else
             {
-                document.getElementById('current-url').textContent = 'Unable to detect';
+                this.setElementText('current-url', 'Unable to detect');
             }
         } catch (error)
         {
-            document.getElementById('current-url').textContent = 'Unable to detect';
+            this.setElementText('current-url', 'Unable to detect');
         }
     }
 
@@ -246,16 +259,16 @@ class FokusPopup
 
             if (isActive)
             {
-                toggle?.classList.add('active');
-                if (statusText) statusText.textContent = 'Protection Active';
+                this.addClass('protection-toggle', 'active');
+                this.setElementText('protection-status', 'Protection Active');
             } else
             {
-                toggle?.classList.remove('active');
-                if (statusText) statusText.textContent = 'Protection Paused';
+                this.removeClass('protection-toggle', 'active');
+                this.setElementText('protection-status', 'Protection Paused');
             }
         } catch (error)
         {
-            console.error('Failed to update protection status:', error);
+            this.logger.error('Failed to update protection status:', error);
         }
     }
 
@@ -263,11 +276,11 @@ class FokusPopup
     {
         // Update tabs
         document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-        document.getElementById(`${tab}-tab`)?.classList.add('active');
+        this.addClass(`${tab}-tab`, 'active');
 
         // Update forms
         document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
-        document.getElementById(`${tab}-form`)?.classList.add('active');
+        this.addClass(`${tab}-form`, 'active');
 
         // Clear messages
         this.clearAuthMessages();
@@ -275,14 +288,15 @@ class FokusPopup
         // Focus input
         setTimeout(() =>
         {
-            document.getElementById(`${tab}-email`)?.focus();
+            const input = document.getElementById(`${tab}-email`);
+            if (input) input.focus();
         }, 100);
     }
 
     async signIn()
     {
-        const email = document.getElementById('signin-email')?.value.trim();
-        const password = document.getElementById('signin-password')?.value;
+        const email = this.getElementValue('signin-email')?.trim();
+        const password = this.getElementValue('signin-password');
         const messageEl = document.getElementById('signin-message');
         const btn = document.getElementById('signin-btn');
 
@@ -292,8 +306,7 @@ class FokusPopup
             return;
         }
 
-        btn.textContent = 'Signing in...';
-        btn.disabled = true;
+        this.setButtonLoading(btn, 'Signing in...');
 
         try
         {
@@ -309,14 +322,9 @@ class FokusPopup
                 this.currentUser = response.user;
                 this.isAuthenticated = true;
                 this.isOfflineMode = response.isOfflineMode || false;
-
-                // Clear cache
                 this.statsCache = null;
 
-                setTimeout(() =>
-                {
-                    this.showDashboard();
-                }, 1000);
+                setTimeout(() => this.showDashboard(), 1000);
             } else
             {
                 this.showMessage(messageEl, response?.error || 'Sign in failed', 'error');
@@ -326,16 +334,15 @@ class FokusPopup
             this.showMessage(messageEl, `Sign in failed: ${error.message}`, 'error');
         } finally
         {
-            btn.textContent = 'Sign In';
-            btn.disabled = false;
+            this.setButtonLoading(btn, 'Sign In', false);
         }
     }
 
     async signUp()
     {
-        const email = document.getElementById('signup-email')?.value.trim();
-        const password = document.getElementById('signup-password')?.value;
-        const confirm = document.getElementById('signup-confirm')?.value;
+        const email = this.getElementValue('signup-email')?.trim();
+        const password = this.getElementValue('signup-password');
+        const confirm = this.getElementValue('signup-confirm');
         const messageEl = document.getElementById('signup-message');
         const btn = document.getElementById('signup-btn');
 
@@ -357,8 +364,7 @@ class FokusPopup
             return;
         }
 
-        btn.textContent = 'Creating account...';
-        btn.disabled = true;
+        this.setButtonLoading(btn, 'Creating account...');
 
         try
         {
@@ -383,8 +389,6 @@ class FokusPopup
                     this.currentUser = response.user;
                     this.isAuthenticated = true;
                     this.isOfflineMode = response.isOfflineMode || false;
-
-                    // Clear cache
                     this.statsCache = null;
 
                     setTimeout(() => this.showDashboard(), 1000);
@@ -398,20 +402,18 @@ class FokusPopup
             this.showMessage(messageEl, `Sign up failed: ${error.message}`, 'error');
         } finally
         {
-            btn.textContent = 'Create Account';
-            btn.disabled = false;
+            this.setButtonLoading(btn, 'Create Account', false);
         }
     }
 
     async enableOfflineMode()
     {
         const btn = document.getElementById('offline-mode-btn');
-        btn.textContent = 'Enabling...';
-        btn.disabled = true;
+        this.setButtonLoading(btn, 'Enabling...');
 
         try
         {
-            const duration = 24 * 60 * 60 * 1000; // 24 hours
+            const duration = 24 * 60 * 60 * 1000;
             const expiry = Date.now() + duration;
 
             await chrome.storage.local.set({
@@ -427,9 +429,8 @@ class FokusPopup
             this.showDashboard();
         } catch (error)
         {
-            console.error('Failed to enable offline mode:', error);
-            btn.textContent = 'Use Offline Mode';
-            btn.disabled = false;
+            this.logger.error('Failed to enable offline mode:', error);
+            this.setButtonLoading(btn, 'Use Offline Mode', false);
         }
     }
 
@@ -442,17 +443,14 @@ class FokusPopup
             const newState = !currentState;
 
             await this.sendMessage({ action: 'setActive', active: newState });
-
-            // Clear cache to force reload
             this.statsCache = null;
-
             await this.updateProtectionStatus();
 
             const message = newState ? 'Protection enabled' : 'Protection paused';
             this.showTempMessage(message);
         } catch (error)
         {
-            console.error('Failed to toggle protection:', error);
+            this.logger.error('Failed to toggle protection:', error);
             this.showTempMessage('Failed to toggle protection');
         }
     }
@@ -462,8 +460,7 @@ class FokusPopup
         const btn = document.getElementById('block-current-site');
         const originalText = btn.textContent;
 
-        btn.textContent = 'Blocking...';
-        btn.disabled = true;
+        this.setButtonLoading(btn, 'Blocking...');
 
         try
         {
@@ -471,8 +468,6 @@ class FokusPopup
             if (response && response.success)
             {
                 this.showTempMessage(`Blocked: ${response.domain}`);
-
-                // Clear cache and reload stats
                 this.statsCache = null;
                 await this.loadStats();
             } else
@@ -484,8 +479,7 @@ class FokusPopup
             this.showTempMessage('Failed to block site');
         } finally
         {
-            btn.textContent = originalText;
-            btn.disabled = false;
+            this.setButtonLoading(btn, originalText, false);
         }
     }
 
@@ -497,9 +491,8 @@ class FokusPopup
             window.close();
         } catch (error)
         {
-            console.error('Failed to open settings:', error);
-            // Fallback method
-            const optionsUrl = chrome.runtime.getURL('options.html');
+            this.logger.error('Failed to open settings:', error);
+            const optionsUrl = chrome.runtime.getURL('src/ui/options/options.html');
             chrome.tabs.create({ url: optionsUrl });
             window.close();
         }
@@ -516,20 +509,18 @@ class FokusPopup
         const btn = document.getElementById('sync-now');
         const originalText = btn.textContent;
 
-        btn.textContent = 'Syncing...';
-        btn.disabled = true;
+        this.setButtonLoading(btn, 'Syncing...');
 
         try
         {
-            // Sync to cloud first, then from cloud
-            const syncToResult = await this.sendMessage({ action: 'syncToCloud' });
-            const syncFromResult = await this.sendMessage({ action: 'syncFromCloud' });
+            const [syncToResult, syncFromResult] = await Promise.all([
+                this.sendMessage({ action: 'syncToCloud' }),
+                this.sendMessage({ action: 'syncFromCloud' })
+            ]);
 
             if (syncToResult?.success || syncFromResult?.success)
             {
                 this.showTempMessage('Sync completed successfully');
-
-                // Clear cache and reload stats
                 this.statsCache = null;
                 await this.loadStats();
             } else
@@ -538,12 +529,11 @@ class FokusPopup
             }
         } catch (error)
         {
-            console.error('Sync error:', error);
+            this.logger.error('Sync error:', error);
             this.showTempMessage('Sync failed - please check your connection');
         } finally
         {
-            btn.textContent = originalText;
-            btn.disabled = false;
+            this.setButtonLoading(btn, originalText, false);
         }
     }
 
@@ -554,8 +544,6 @@ class FokusPopup
         try
         {
             await this.sendMessage({ action: 'signOut' });
-
-            // Clear local offline mode data
             await chrome.storage.local.remove(['offlineMode', 'offlineExpiry', 'offlineEmail']);
 
             this.currentUser = null;
@@ -567,8 +555,50 @@ class FokusPopup
             this.clearAuthMessages();
         } catch (error)
         {
-            console.error('Sign out error:', error);
+            this.logger.error('Sign out error:', error);
             this.showTempMessage('Sign out failed');
+        }
+    }
+
+    // UI Helper methods
+    setElementDisplay(id, display)
+    {
+        const element = document.getElementById(id);
+        if (element) element.style.display = display;
+    }
+
+    setElementText(selector, text)
+    {
+        const element = selector.startsWith('#') ?
+            document.getElementById(selector.slice(1)) :
+            document.querySelector(selector);
+        if (element) element.textContent = text;
+    }
+
+    getElementValue(id)
+    {
+        const element = document.getElementById(id);
+        return element ? element.value : '';
+    }
+
+    addClass(id, className)
+    {
+        const element = document.getElementById(id);
+        if (element) element.classList.add(className);
+    }
+
+    removeClass(id, className)
+    {
+        const element = document.getElementById(id);
+        if (element) element.classList.remove(className);
+    }
+
+    setButtonLoading(button, text, loading = true)
+    {
+        if (button)
+        {
+            button.textContent = text;
+            button.disabled = loading;
         }
     }
 
@@ -579,7 +609,7 @@ class FokusPopup
         const messageClass = type === 'success' ? 'success' :
             type === 'info' ? 'info' : 'error';
 
-        element.innerHTML = `<div class="message ${messageClass}">${message}</div>`;
+        element.innerHTML = `<div class="message ${messageClass}">${Utils.escapeHtml(message)}</div>`;
 
         setTimeout(() =>
         {
@@ -592,62 +622,7 @@ class FokusPopup
 
     showTempMessage(message)
     {
-        // Remove existing toast if any
-        const existing = document.querySelector('.toast-overlay');
-        if (existing) existing.remove();
-
-        const overlay = document.createElement('div');
-        overlay.className = 'toast-overlay';
-        overlay.style.cssText = `
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.85);
-            color: white;
-            border-radius: 6px;
-            font-size: 12px;
-            text-align: center;
-            z-index: 10000;
-            animation: slideDown 0.3s ease-out;
-        `;
-        overlay.textContent = message;
-
-        // Add animation styles if not present
-        if (!document.getElementById('temp-message-styles'))
-        {
-            const style = document.createElement('style');
-            style.id = 'temp-message-styles';
-            style.textContent = `
-                @keyframes slideDown {
-                    from { transform: translateY(-20px); opacity: 0; }
-                    to { transform: translateY(0); opacity: 1; }
-                }
-                @keyframes slideUp {
-                    from { transform: translateY(0); opacity: 1; }
-                    to { transform: translateY(-20px); opacity: 0; }
-                }
-            `;
-            document.head.appendChild(style);
-        }
-
-        document.body.appendChild(overlay);
-
-        setTimeout(() =>
-        {
-            if (overlay.parentNode)
-            {
-                overlay.style.animation = 'slideUp 0.3s ease-out';
-                setTimeout(() =>
-                {
-                    if (overlay.parentNode)
-                    {
-                        overlay.remove();
-                    }
-                }, 300);
-            }
-        }, 3000);
+        Utils.createToast(message, 'info', 3000);
     }
 
     clearAuthMessages()
@@ -660,7 +635,7 @@ class FokusPopup
 
     showError(message)
     {
-        console.error('Popup error:', message);
+        this.logger.error('Popup error:', message);
         this.showTempMessage(message);
     }
 
@@ -674,7 +649,6 @@ class FokusPopup
                 {
                     if (chrome.runtime.lastError)
                     {
-                        console.error('Runtime error:', chrome.runtime.lastError.message);
                         reject(new Error(chrome.runtime.lastError.message));
                     } else
                     {
@@ -683,22 +657,20 @@ class FokusPopup
                 });
             } catch (error)
             {
-                console.error('Failed to send message:', error);
                 reject(error);
             }
         });
     }
 }
 
-// Initialize popup when DOM is ready
+// Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () =>
 {
-    console.log('Fokus popup DOM loaded');
     const startTime = performance.now();
 
     try
     {
-        // Verify required elements exist
+        // Verify required elements
         const requiredElements = [
             'signin-tab', 'signup-tab', 'signin-form', 'signup-form',
             'signin-email', 'signin-password', 'signin-btn',
@@ -710,77 +682,40 @@ document.addEventListener('DOMContentLoaded', () =>
 
         if (missingElements.length > 0)
         {
-            console.error('Missing required elements:', missingElements);
             throw new Error(`Missing elements: ${missingElements.join(', ')}`);
         }
 
-        // Initialize popup
-        window.fokusPopup = new FokusPopup();
+        window.popupController = new PopupController();
 
         const loadTime = performance.now() - startTime;
-        console.log(`Fokus popup initialized in ${loadTime.toFixed(2)}ms`);
+        console.log(`Popup initialized in ${loadTime.toFixed(2)}ms`);
 
     } catch (error)
     {
         console.error('Failed to initialize popup:', error);
-
-        // Show error UI
         document.body.innerHTML = `
             <div style="padding: 20px; text-align: center; font-family: Arial, sans-serif;">
                 <div style="color: #e74c3c; font-size: 16px; font-weight: bold; margin-bottom: 10px;">
                     Initialization Error
                 </div>
                 <p style="color: #333; font-size: 14px; margin-bottom: 15px;">
-                    Failed to initialize Fokus popup.
+                    Failed to initialize popup.
                 </p>
                 <button onclick="location.reload()" style="
-                    background: #4CAF50;
-                    color: white;
-                    border: none;
-                    padding: 10px 20px;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    font-size: 14px;
-                ">
-                    Reload
-                </button>
-                <div style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 5px;">
-                    <small style="color: #666;">
-                        Error: ${error.message}
-                    </small>
-                </div>
+                    background: #4CAF50; color: white; border: none;
+                    padding: 10px 20px; border-radius: 5px; cursor: pointer;
+                ">Reload</button>
             </div>
         `;
     }
 });
 
-// Error tracking
-window.addEventListener('error', (event) =>
-{
-    console.error('Popup error:', event.error);
-
-    // Store error for debugging
-    chrome.storage.local.get(['errorLog'], (data) =>
-    {
-        const errors = data.errorLog || [];
-        errors.push({
-            message: event.error.message,
-            stack: event.error.stack,
-            timestamp: new Date().toISOString(),
-            context: 'popup'
-        });
-        chrome.storage.local.set({
-            errorLog: errors.slice(-50) // Keep only last 50 errors
-        });
-    });
-});
-
 // Cleanup on unload
 window.addEventListener('unload', () =>
 {
-    if (window.fokusPopup)
+    if (window.popupController)
     {
-        window.fokusPopup.statsCache = null;
-        window.fokusPopup = null;
+        window.popupController.statsCache = null;
+        window.popupController = null;
     }
 });

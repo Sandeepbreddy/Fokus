@@ -1,14 +1,21 @@
-// supabase-client.js - Updated without external CDN dependency
+// src/services/supabase-client.js - Supabase cloud sync client
+import { Logger } from '../shared/logger.js';
+import { Utils } from '../shared/utils.js';
+import { STORAGE_KEYS, TIMEOUTS } from '../shared/constants.js';
 
-class SupabaseClient
+export class SupabaseClient
 {
     constructor()
     {
-        this.supabase = null;
+        this.logger = new Logger('SupabaseClient');
+        this.supabaseUrl = null;
+        this.supabaseKey = null;
+        this.headers = {};
         this.currentUser = null;
         this.isInitialized = false;
         this.syncInProgress = false;
         this.config = null;
+        this.syncTimeout = null;
     }
 
     async init()
@@ -17,16 +24,14 @@ class SupabaseClient
 
         try
         {
-            // Load configuration from config file
             await this.loadConfig();
 
             if (!this.config || !this.config.supabase.url || !this.config.supabase.anonKey)
             {
-                console.error('❌ Supabase configuration missing in config file');
+                this.logger.warn('Supabase configuration missing');
                 return false;
             }
 
-            // Use a simple HTTP client instead of the full Supabase SDK
             this.supabaseUrl = this.config.supabase.url;
             this.supabaseKey = this.config.supabase.anonKey;
             this.headers = {
@@ -35,7 +40,7 @@ class SupabaseClient
                 'Content-Type': 'application/json'
             };
 
-            // Check if we have a stored session
+            // Check for stored session
             const storedSession = await this.getStoredSession();
             if (storedSession && storedSession.access_token)
             {
@@ -44,12 +49,11 @@ class SupabaseClient
             }
 
             this.isInitialized = true;
-            console.log('✅ Supabase client initialized successfully (HTTP-only mode)');
-            console.log('🌐 Connected to:', this.config.supabase.projectName);
+            this.logger.info('Supabase client initialized successfully');
             return true;
         } catch (error)
         {
-            console.error('❌ Failed to initialize Supabase client:', error);
+            this.logger.error('Failed to initialize Supabase client:', error);
             return false;
         }
     }
@@ -58,8 +62,7 @@ class SupabaseClient
     {
         try
         {
-            // Try to fetch from extension directory
-            const configUrl = chrome.runtime.getURL('config.json');
+            const configUrl = chrome.runtime.getURL('config/config.json');
             const response = await fetch(configUrl);
 
             if (!response.ok)
@@ -68,9 +71,8 @@ class SupabaseClient
             }
 
             this.config = await response.json();
-            console.log('📋 Loaded Supabase config:', this.config.supabase.projectName);
+            this.logger.debug('Loaded Supabase config');
 
-            // Validate required fields
             if (!this.config.supabase.url || !this.config.supabase.anonKey)
             {
                 throw new Error('Invalid config: missing Supabase URL or anon key');
@@ -79,21 +81,21 @@ class SupabaseClient
             return this.config;
         } catch (error)
         {
-            console.error('❌ Failed to load config:', error);
+            this.logger.error('Failed to load config:', error);
 
-            // Fallback: check if config is stored in local storage (for development)
+            // Fallback: check local storage
             try
             {
                 const stored = await chrome.storage.local.get(['supabaseConfig']);
                 if (stored.supabaseConfig)
                 {
                     this.config = stored.supabaseConfig;
-                    console.log('📋 Using stored config as fallback');
+                    this.logger.info('Using stored config as fallback');
                     return this.config;
                 }
             } catch (fallbackError)
             {
-                console.error('❌ Fallback config also failed:', fallbackError);
+                this.logger.error('Fallback config also failed:', fallbackError);
             }
 
             throw error;
@@ -105,7 +107,8 @@ class SupabaseClient
         const url = `${this.supabaseUrl}/rest/v1/${endpoint}`;
         const options = {
             method,
-            headers: { ...this.headers }
+            headers: { ...this.headers },
+            signal: Utils.createAbortSignal(TIMEOUTS.FETCH_TIMEOUT)
         };
 
         if (body)
@@ -133,7 +136,7 @@ class SupabaseClient
 
         try
         {
-            console.log('🔐 Creating new user account...');
+            this.logger.info('Creating new user account...');
 
             const response = await fetch(`${this.supabaseUrl}/auth/v1/signup`, {
                 method: 'POST',
@@ -149,7 +152,8 @@ class SupabaseClient
                         version: this.config.app.version,
                         registration_source: 'fokus_extension'
                     }
-                })
+                }),
+                signal: Utils.createAbortSignal(TIMEOUTS.FETCH_TIMEOUT)
             });
 
             const data = await response.json();
@@ -169,11 +173,10 @@ class SupabaseClient
                     this.headers['Authorization'] = `Bearer ${data.session.access_token}`;
                 }
 
-                // Create user profile
                 await this.createUserProfile(data.user);
             }
 
-            console.log('✅ User account created successfully');
+            this.logger.info('User account created successfully');
             return {
                 success: true,
                 user: data.user,
@@ -181,7 +184,7 @@ class SupabaseClient
             };
         } catch (error)
         {
-            console.error('❌ Sign up error:', error);
+            this.logger.error('Sign up error:', error);
             throw error;
         }
     }
@@ -195,7 +198,7 @@ class SupabaseClient
 
         try
         {
-            console.log('🔐 Signing in user...');
+            this.logger.info('Signing in user...');
 
             const response = await fetch(`${this.supabaseUrl}/auth/v1/token?grant_type=password`, {
                 method: 'POST',
@@ -203,10 +206,8 @@ class SupabaseClient
                     'apikey': this.supabaseKey,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    email,
-                    password
-                })
+                body: JSON.stringify({ email, password }),
+                signal: Utils.createAbortSignal(TIMEOUTS.FETCH_TIMEOUT)
             });
 
             const data = await response.json();
@@ -225,17 +226,16 @@ class SupabaseClient
                 this.headers['Authorization'] = `Bearer ${session.access_token}`;
             }
 
-            // Update last login time
             await this.updateUserProfile(data.user.id, {
                 last_login: new Date().toISOString(),
                 app_version: this.config.app.version
             });
 
-            console.log('✅ User signed in successfully');
+            this.logger.info('User signed in successfully');
             return { success: true, user: data.user };
         } catch (error)
         {
-            console.error('❌ Sign in error:', error);
+            this.logger.error('Sign in error:', error);
             throw error;
         }
     }
@@ -246,13 +246,14 @@ class SupabaseClient
 
         try
         {
-            console.log('🚪 Signing out user...');
+            this.logger.info('Signing out user...');
 
             if (this.currentUser)
             {
                 await fetch(`${this.supabaseUrl}/auth/v1/logout`, {
                     method: 'POST',
-                    headers: this.headers
+                    headers: this.headers,
+                    signal: Utils.createAbortSignal(TIMEOUTS.FETCH_TIMEOUT)
                 });
             }
 
@@ -260,11 +261,11 @@ class SupabaseClient
             this.headers['Authorization'] = `Bearer ${this.supabaseKey}`;
             await this.clearStoredSession();
 
-            console.log('✅ User signed out successfully');
+            this.logger.info('User signed out successfully');
             return { success: true };
         } catch (error)
         {
-            console.error('❌ Sign out error:', error);
+            this.logger.error('Sign out error:', error);
             // Don't throw error for sign out - always succeed locally
             this.currentUser = null;
             this.headers['Authorization'] = `Bearer ${this.supabaseKey}`;
@@ -286,13 +287,13 @@ class SupabaseClient
                 registration_source: 'fokus_extension'
             });
 
-            console.log('✅ User profile created');
+            this.logger.info('User profile created');
         } catch (error)
         {
             // Ignore duplicate key errors
             if (!error.message.includes('duplicate') && !error.message.includes('23505'))
             {
-                console.error('❌ Failed to create user profile:', error);
+                this.logger.error('Failed to create user profile:', error);
             }
         }
     }
@@ -302,10 +303,10 @@ class SupabaseClient
         try
         {
             await this.makeRequest('PATCH', `user_profiles?id=eq.${userId}`, updates);
-            console.log('✅ User profile updated');
+            this.logger.debug('User profile updated');
         } catch (error)
         {
-            console.error('❌ Failed to update user profile:', error);
+            this.logger.error('Failed to update user profile:', error);
         }
     }
 
@@ -313,7 +314,7 @@ class SupabaseClient
     {
         if (!this.currentUser || this.syncInProgress)
         {
-            console.log('⏸️ Sync skipped - no user or sync in progress');
+            this.logger.warn('Sync skipped - no user or sync in progress');
             return { success: false, reason: 'No user or sync in progress' };
         }
 
@@ -321,17 +322,17 @@ class SupabaseClient
 
         try
         {
-            console.log('📤 Starting sync to cloud...');
+            this.logger.info('Starting sync to cloud...');
 
             // Get all local settings (excluding PIN)
             const localData = await chrome.storage.local.get([
-                'blockedKeywords',
-                'customDomains',
-                'blocklistUrls',
-                'isActive',
-                'blocksToday',
-                'focusStreak',
-                'totalBlocks',
+                STORAGE_KEYS.BLOCKED_KEYWORDS,
+                STORAGE_KEYS.CUSTOM_DOMAINS,
+                STORAGE_KEYS.BLOCKLIST_SOURCES,
+                STORAGE_KEYS.IS_ACTIVE,
+                STORAGE_KEYS.BLOCKS_TODAY,
+                STORAGE_KEYS.FOCUS_STREAK,
+                STORAGE_KEYS.TOTAL_BLOCKS,
                 'lastGithubUpdate'
             ]);
 
@@ -339,19 +340,19 @@ class SupabaseClient
             const syncData = {
                 user_id: this.currentUser.id,
                 settings: {
-                    blockedKeywords: localData.blockedKeywords || [],
-                    customDomains: localData.customDomains || [],
-                    blocklistUrls: localData.blocklistUrls || [],
-                    isActive: localData.isActive !== undefined ? localData.isActive : true,
+                    blockedKeywords: localData[STORAGE_KEYS.BLOCKED_KEYWORDS] || [],
+                    customDomains: localData[STORAGE_KEYS.CUSTOM_DOMAINS] || [],
+                    blocklistSources: localData[STORAGE_KEYS.BLOCKLIST_SOURCES] || [],
+                    isActive: localData[STORAGE_KEYS.IS_ACTIVE] !== undefined ? localData[STORAGE_KEYS.IS_ACTIVE] : true,
                     lastGithubUpdate: localData.lastGithubUpdate || 0
                 },
                 stats: {
-                    blocksToday: localData.blocksToday || 0,
-                    focusStreak: localData.focusStreak || 0,
-                    totalBlocks: localData.totalBlocks || 0
+                    blocksToday: localData[STORAGE_KEYS.BLOCKS_TODAY] || 0,
+                    focusStreak: localData[STORAGE_KEYS.FOCUS_STREAK] || 0,
+                    totalBlocks: localData[STORAGE_KEYS.TOTAL_BLOCKS] || 0
                 },
                 device_info: {
-                    browser: this.getBrowserInfo(),
+                    browser: Utils.getBrowserInfo(),
                     app_version: this.config.app.version,
                     last_sync: new Date().toISOString(),
                     sync_source: 'manual_upload'
@@ -364,16 +365,16 @@ class SupabaseClient
 
             // Update last sync time locally
             await chrome.storage.local.set({
-                lastCloudSync: new Date().toISOString(),
+                [STORAGE_KEYS.LAST_CLOUD_SYNC]: new Date().toISOString(),
                 lastSyncDirection: 'upload'
             });
 
-            console.log('✅ Sync to cloud completed successfully');
+            this.logger.info('Sync to cloud completed successfully');
             return { success: true, action: 'uploaded', timestamp: new Date().toISOString() };
 
         } catch (error)
         {
-            console.error('❌ Sync to cloud failed:', error);
+            this.logger.error('Sync to cloud failed:', error);
             throw error;
         } finally
         {
@@ -392,14 +393,13 @@ class SupabaseClient
 
         try
         {
-            console.log('📥 Starting sync from cloud...');
+            this.logger.info('Starting sync from cloud...');
 
             const data = await this.makeRequest('GET', `user_settings?user_id=eq.${this.currentUser.id}&limit=1`);
 
             if (!data || data.length === 0)
             {
-                // No data found, this is first sync
-                console.log('📤 No cloud data found, uploading local settings...');
+                this.logger.info('No cloud data found, uploading local settings...');
                 const result = await this.syncToCloud();
                 return { success: true, action: 'uploaded_first_time', ...result };
             }
@@ -407,45 +407,49 @@ class SupabaseClient
             const cloudData = data[0];
 
             // Get local last sync time
-            const localData = await chrome.storage.local.get(['lastCloudSync']);
-            const localLastSync = localData.lastCloudSync ? new Date(localData.lastCloudSync) : new Date(0);
+            const localData = await chrome.storage.local.get([STORAGE_KEYS.LAST_CLOUD_SYNC]);
+            const localLastSync = localData[STORAGE_KEYS.LAST_CLOUD_SYNC] ? new Date(localData[STORAGE_KEYS.LAST_CLOUD_SYNC]) : new Date(0);
             const cloudLastSync = new Date(cloudData.updated_at);
 
             // Only sync if cloud data is newer
             if (cloudLastSync <= localLastSync)
             {
-                console.log('✅ Local data is up to date');
+                this.logger.info('Local data is up to date');
                 return { success: true, action: 'up_to_date' };
             }
 
             // Preserve local PIN and sensitive data
-            const currentSensitive = await chrome.storage.local.get(['pin']);
+            const currentSensitive = await chrome.storage.local.get([STORAGE_KEYS.PIN]);
 
             // Apply cloud settings to local storage
             const settingsToUpdate = {
                 ...cloudData.settings,
-                pin: currentSensitive.pin || '1234', // Keep local PIN
-                lastCloudSync: new Date().toISOString(),
+                [STORAGE_KEYS.PIN]: currentSensitive[STORAGE_KEYS.PIN] || '1234',
+                [STORAGE_KEYS.LAST_CLOUD_SYNC]: new Date().toISOString(),
                 lastSyncDirection: 'download'
             };
 
             // Also sync stats if they're higher in cloud
             if (cloudData.stats)
             {
-                const localStats = await chrome.storage.local.get(['blocksToday', 'focusStreak', 'totalBlocks']);
-                settingsToUpdate.blocksToday = Math.max(localStats.blocksToday || 0, cloudData.stats.blocksToday || 0);
-                settingsToUpdate.focusStreak = Math.max(localStats.focusStreak || 0, cloudData.stats.focusStreak || 0);
-                settingsToUpdate.totalBlocks = Math.max(localStats.totalBlocks || 0, cloudData.stats.totalBlocks || 0);
+                const localStats = await chrome.storage.local.get([
+                    STORAGE_KEYS.BLOCKS_TODAY,
+                    STORAGE_KEYS.FOCUS_STREAK,
+                    STORAGE_KEYS.TOTAL_BLOCKS
+                ]);
+                settingsToUpdate[STORAGE_KEYS.BLOCKS_TODAY] = Math.max(localStats[STORAGE_KEYS.BLOCKS_TODAY] || 0, cloudData.stats.blocksToday || 0);
+                settingsToUpdate[STORAGE_KEYS.FOCUS_STREAK] = Math.max(localStats[STORAGE_KEYS.FOCUS_STREAK] || 0, cloudData.stats.focusStreak || 0);
+                settingsToUpdate[STORAGE_KEYS.TOTAL_BLOCKS] = Math.max(localStats[STORAGE_KEYS.TOTAL_BLOCKS] || 0, cloudData.stats.totalBlocks || 0);
             }
 
             await chrome.storage.local.set(settingsToUpdate);
 
-            console.log('✅ Sync from cloud completed successfully');
+            this.logger.info('Sync from cloud completed successfully');
             return { success: true, action: 'downloaded', timestamp: cloudLastSync.toISOString() };
 
         } catch (error)
         {
-            console.error('❌ Sync from cloud failed:', error);
+            this.logger.error('Sync from cloud failed:', error);
             throw error;
         } finally
         {
@@ -462,35 +466,35 @@ class SupabaseClient
 
         try
         {
-            console.log('💾 Creating cloud backup...');
+            this.logger.info('Creating cloud backup...');
 
             // Get current settings (excluding PIN)
             const localData = await chrome.storage.local.get([
-                'blockedKeywords',
-                'customDomains',
-                'blocklistUrls',
-                'isActive',
-                'blocksToday',
-                'focusStreak',
-                'totalBlocks'
+                STORAGE_KEYS.BLOCKED_KEYWORDS,
+                STORAGE_KEYS.CUSTOM_DOMAINS,
+                STORAGE_KEYS.BLOCKLIST_SOURCES,
+                STORAGE_KEYS.IS_ACTIVE,
+                STORAGE_KEYS.BLOCKS_TODAY,
+                STORAGE_KEYS.FOCUS_STREAK,
+                STORAGE_KEYS.TOTAL_BLOCKS
             ]);
 
             const backupData = {
                 user_id: this.currentUser.id,
                 name: name || `Backup ${new Date().toLocaleDateString()}`,
                 settings: {
-                    blockedKeywords: localData.blockedKeywords || [],
-                    customDomains: localData.customDomains || [],
-                    blocklistUrls: localData.blocklistUrls || [],
-                    isActive: localData.isActive !== undefined ? localData.isActive : true
+                    blockedKeywords: localData[STORAGE_KEYS.BLOCKED_KEYWORDS] || [],
+                    customDomains: localData[STORAGE_KEYS.CUSTOM_DOMAINS] || [],
+                    blocklistSources: localData[STORAGE_KEYS.BLOCKLIST_SOURCES] || [],
+                    isActive: localData[STORAGE_KEYS.IS_ACTIVE] !== undefined ? localData[STORAGE_KEYS.IS_ACTIVE] : true
                 },
                 stats: {
-                    blocksToday: localData.blocksToday || 0,
-                    focusStreak: localData.focusStreak || 0,
-                    totalBlocks: localData.totalBlocks || 0
+                    blocksToday: localData[STORAGE_KEYS.BLOCKS_TODAY] || 0,
+                    focusStreak: localData[STORAGE_KEYS.FOCUS_STREAK] || 0,
+                    totalBlocks: localData[STORAGE_KEYS.TOTAL_BLOCKS] || 0
                 },
                 device_info: {
-                    browser: this.getBrowserInfo(),
+                    browser: Utils.getBrowserInfo(),
                     app_version: this.config.app.version,
                     backup_source: 'manual'
                 },
@@ -499,11 +503,11 @@ class SupabaseClient
 
             const result = await this.makeRequest('POST', 'user_backups', backupData);
 
-            console.log('✅ Cloud backup created successfully');
+            this.logger.info('Cloud backup created successfully');
             return result[0] || result;
         } catch (error)
         {
-            console.error('❌ Failed to create backup:', error);
+            this.logger.error('Failed to create backup:', error);
             throw error;
         }
     }
@@ -524,7 +528,7 @@ class SupabaseClient
             return data || [];
         } catch (error)
         {
-            console.error('❌ Failed to get cloud backups:', error);
+            this.logger.error('Failed to get cloud backups:', error);
             throw error;
         }
     }
@@ -538,7 +542,7 @@ class SupabaseClient
 
         try
         {
-            console.log('♻️ Restoring backup...');
+            this.logger.info('Restoring backup...');
 
             const data = await this.makeRequest('GET', `user_backups?id=eq.${backupId}&user_id=eq.${this.currentUser.id}&limit=1`);
 
@@ -550,13 +554,13 @@ class SupabaseClient
             const backup = data[0];
 
             // Preserve local PIN
-            const currentPin = await chrome.storage.local.get(['pin']);
+            const currentPin = await chrome.storage.local.get([STORAGE_KEYS.PIN]);
 
             // Restore settings
             const settingsToRestore = {
                 ...backup.settings,
-                pin: currentPin.pin || '1234',
-                lastCloudSync: new Date().toISOString(),
+                [STORAGE_KEYS.PIN]: currentPin[STORAGE_KEYS.PIN] || '1234',
+                [STORAGE_KEYS.LAST_CLOUD_SYNC]: new Date().toISOString(),
                 lastRestoreDate: new Date().toISOString(),
                 restoredFromBackup: backup.name
             };
@@ -572,11 +576,11 @@ class SupabaseClient
             // Sync to cloud after restore
             await this.syncToCloud();
 
-            console.log('✅ Backup restored successfully');
+            this.logger.info('Backup restored successfully');
             return { success: true };
         } catch (error)
         {
-            console.error('❌ Failed to restore backup:', error);
+            this.logger.error('Failed to restore backup:', error);
             throw error;
         }
     }
@@ -591,11 +595,11 @@ class SupabaseClient
         try
         {
             await this.makeRequest('DELETE', `user_backups?id=eq.${backupId}&user_id=eq.${this.currentUser.id}`);
-            console.log('✅ Backup deleted successfully');
+            this.logger.info('Backup deleted successfully');
             return { success: true };
         } catch (error)
         {
-            console.error('❌ Failed to delete backup:', error);
+            this.logger.error('Failed to delete backup:', error);
             throw error;
         }
     }
@@ -606,7 +610,7 @@ class SupabaseClient
 
         const syncInterval = this.config.features.defaultSyncInterval || 300000; // 5 minutes
 
-        console.log(`🔄 Setting up auto-sync every ${syncInterval / 1000} seconds`);
+        this.logger.info(`Setting up auto-sync every ${syncInterval / 1000} seconds`);
 
         // Sync every interval when user is active
         setInterval(async () =>
@@ -619,14 +623,14 @@ class SupabaseClient
                 }
             } catch (error)
             {
-                console.error('❌ Auto-sync failed:', error);
+                this.logger.error('Auto-sync failed:', error);
             }
         }, syncInterval);
 
         // Sync when settings change
         chrome.storage.onChanged.addListener(async (changes, namespace) =>
         {
-            if (namespace === 'local' && this.currentUser && !changes.lastCloudSync)
+            if (namespace === 'local' && this.currentUser && !changes[STORAGE_KEYS.LAST_CLOUD_SYNC])
             {
                 // Debounce sync to avoid too frequent syncs
                 clearTimeout(this.syncTimeout);
@@ -637,9 +641,9 @@ class SupabaseClient
                         await this.syncToCloud();
                     } catch (error)
                     {
-                        console.error('❌ Change-triggered sync failed:', error);
+                        this.logger.error('Change-triggered sync failed:', error);
                     }
-                }, 2000); // 2 second delay
+                }, TIMEOUTS.SYNC_DEBOUNCE);
             }
         });
     }
@@ -648,7 +652,7 @@ class SupabaseClient
     async storeSession(session)
     {
         await chrome.storage.local.set({
-            supabaseSession: {
+            [STORAGE_KEYS.SUPABASE_SESSION]: {
                 access_token: session.access_token,
                 refresh_token: session.refresh_token,
                 user: session.user,
@@ -659,23 +663,13 @@ class SupabaseClient
 
     async getStoredSession()
     {
-        const data = await chrome.storage.local.get(['supabaseSession']);
-        return data.supabaseSession;
+        const data = await chrome.storage.local.get([STORAGE_KEYS.SUPABASE_SESSION]);
+        return data[STORAGE_KEYS.SUPABASE_SESSION];
     }
 
     async clearStoredSession()
     {
-        await chrome.storage.local.remove(['supabaseSession']);
-    }
-
-    getBrowserInfo()
-    {
-        const userAgent = navigator.userAgent;
-        if (userAgent.includes('Chrome')) return 'Chrome';
-        if (userAgent.includes('Firefox')) return 'Firefox';
-        if (userAgent.includes('Safari')) return 'Safari';
-        if (userAgent.includes('Edge')) return 'Edge';
-        return 'Unknown';
+        await chrome.storage.local.remove([STORAGE_KEYS.SUPABASE_SESSION]);
     }
 
     isAuthenticated()
@@ -720,13 +714,22 @@ class SupabaseClient
             return { connected: false, reason: error.message };
         }
     }
+
+    // Cleanup method
+    destroy()
+    {
+        if (this.syncTimeout)
+        {
+            clearTimeout(this.syncTimeout);
+            this.syncTimeout = null;
+        }
+
+        this.currentUser = null;
+        this.isInitialized = false;
+        this.syncInProgress = false;
+        this.logger.info('SupabaseClient destroyed');
+    }
 }
 
 // Export for use in other scripts
-if (typeof module !== 'undefined' && module.exports)
-{
-    module.exports = SupabaseClient;
-} else
-{
-    window.SupabaseClient = SupabaseClient;
-}
+export default SupabaseClient;

@@ -1,0 +1,478 @@
+/* src/styles/popup.css - Popup styling */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    width: 380px;
+    min-height: 500px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    overflow-x: hidden;
+}
+
+.popup-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Header */
+.header {
+    padding: 20px;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.logo {
+    font-size: 32px;
+    margin-bottom: 8px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+.title {
+    font-size: 20px;
+    font-weight: 300;
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+/* Loading State */
+.loading {
+    text-align: center;
+    padding: 40px 20px;
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+.loading-spinner {
+    font-size: 20px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 10px;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Auth Section */
+.auth-section {
+    padding: 25px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.auth-tabs {
+    display: flex;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.auth-tab {
+    flex: 1;
+    padding: 12px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    transition: all 0.3s ease;
+}
+
+.auth-tab.active {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    font-weight: 500;
+}
+
+.auth-form {
+    display: none;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.auth-form.active {
+    display: flex;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.form-group label {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.form-group input {
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 14px;
+    backdrop-filter: blur(10px);
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+.form-group input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* Buttons */
+.btn {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    margin-top: 10px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Messages */
+.message {
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    margin-top: 10px;
+    text-align: center;
+}
+
+.message.success {
+    background: rgba(76, 175, 80, 0.2);
+    border: 1px solid rgba(76, 175, 80, 0.5);
+    color: #4CAF50;
+}
+
+.message.error {
+    background: rgba(244, 67, 54, 0.2);
+    border: 1px solid rgba(244, 67, 54, 0.5);
+    color: #ff6b6b;
+}
+
+.message.info {
+    background: rgba(33, 150, 243, 0.2);
+    border: 1px solid rgba(33, 150, 243, 0.5);
+    color: #2196F3;
+}
+
+/* Dashboard Section */
+.dashboard-section {
+    padding: 20px;
+    flex: 1;
+    display: none;
+    flex-direction: column;
+}
+
+.dashboard-section.active {
+    display: flex;
+}
+
+.user-info {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.user-email {
+    font-size: 14px;
+    color: #4CAF50;
+    margin-bottom: 5px;
+}
+
+.connection-status {
+    font-size: 11px;
+    opacity: 0.8;
+}
+
+/* Protection Toggle */
+.protection-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.toggle-text {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.toggle {
+    position: relative;
+    width: 50px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.toggle.active {
+    background: #4CAF50;
+}
+
+.toggle-slider {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+}
+
+.toggle.active .toggle-slider {
+    transform: translateX(26px);
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    backdrop-filter: blur(10px);
+}
+
+.stat-number {
+    font-size: 20px;
+    font-weight: bold;
+    color: #4CAF50;
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    font-size: 11px;
+    opacity: 0.8;
+}
+
+/* Current Site */
+.current-site {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.site-label {
+    font-size: 12px;
+    opacity: 0.8;
+    margin-bottom: 5px;
+}
+
+.site-url {
+    font-size: 13px;
+    word-break: break-all;
+    margin-bottom: 10px;
+}
+
+/* Actions */
+.actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Footer */
+.footer-info {
+    padding: 15px 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+/* Toast notifications */
+.toast-notification {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    text-align: center;
+    z-index: 10000;
+    animation: slideDown 0.3s ease-out;
+}
+
+.toast-success {
+    background: rgba(76, 175, 80, 0.9);
+    color: white;
+}
+
+.toast-error {
+    background: rgba(244, 67, 54, 0.9);
+    color: white;
+}
+
+.toast-info {
+    background: rgba(33, 150, 243, 0.9);
+    color: white;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Responsive adjustments */
+@media (max-height: 600px) {
+    .auth-section {
+        padding: 15px;
+    }
+
+    .dashboard-section {
+        padding: 15px;
+    }
+
+    .stats-grid {
+        margin-bottom: 15px;
+    }
+}
+
+/* Focus states */
+.btn:focus,
+.auth-tab:focus,
+input:focus {
+    outline: 2px solid #4CAF50;
+    outline-offset: 2px;
+}
+
+/* Loading states */
+.btn:disabled {
+    position: relative;
+}
+
+.btn:disabled::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Hover effects */
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.current-site:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.protection-toggle:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* Animation delays for staggered loading */
+.stat-card:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.stat-card:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.stat-card:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+.stat-card:nth-child(4) {
+    animation-delay: 0.4s;
+}
