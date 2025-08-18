@@ -1,11 +1,35 @@
-// src/shared/logger.js - Centralized logging
+// src/shared/logger.js - Centralized logging (Browser-compatible)
 export class Logger
 {
     constructor(context = 'App')
     {
         this.context = context;
-        this.isDebug = process?.env?.NODE_ENV === 'development' ||
-            typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version?.includes('dev');
+        // Fix: Remove Node.js process reference and use browser-compatible detection
+        this.isDebug = this.detectDebugMode();
+    }
+
+    detectDebugMode()
+    {
+        try
+        {
+            // Check if we're in development mode via various indicators
+            const isDev =
+                // Extension development mode
+                (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version?.includes('dev')) ||
+                // Local development
+                window.location.hostname === 'localhost' ||
+                window.location.hostname === '127.0.0.1' ||
+                // Debug flag in localStorage
+                localStorage.getItem('debug') === 'true' ||
+                // URL parameter
+                new URLSearchParams(window.location.search).has('debug');
+
+            return isDev;
+        } catch (error)
+        {
+            // Default to false if we can't determine
+            return false;
+        }
     }
 
     formatMessage(level, message, ...args)

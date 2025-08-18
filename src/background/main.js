@@ -1,4 +1,4 @@
-// src/background/main.js - Main background script entry point
+// src/background/main.js - Main background script entry point (Fixed)
 import { Logger } from '../shared/logger.js';
 import { errorHandler } from '../shared/error-handler.js';
 import { ContentBlocker } from './content-blocker.js';
@@ -15,7 +15,12 @@ class FokusBackground
         this.messageHandler = null;
         this.isInitialized = false;
 
-        this.init();
+        // Start initialization
+        this.init().catch(error =>
+        {
+            this.logger.error('Critical initialization error:', error);
+            this.createFallbackServices();
+        });
     }
 
     async init()
@@ -69,13 +74,21 @@ class FokusBackground
     {
         this.logger.info('Initializing core services...');
 
-        // Initialize services in parallel
-        const [authResult] = await Promise.all([
-            authManager.init(),
-            this.initializeContentBlocker()
-        ]);
+        try
+        {
+            // Initialize services in sequence to avoid race conditions
+            await authManager.init();
+            this.logger.info('Auth manager initialized');
 
-        this.logger.info('Core services initialized');
+            await this.initializeContentBlocker();
+            this.logger.info('Content blocker initialized');
+
+            this.logger.info('Core services initialized');
+        } catch (error)
+        {
+            this.logger.error('Service initialization failed:', error);
+            throw error;
+        }
     }
 
     async initializeContentBlocker()
