@@ -1,10 +1,9 @@
-// src/shared/logger.js - Centralized logging (Browser-compatible)
+// src/shared/logger.js - Centralized logging (Service Worker compatible)
 export class Logger
 {
     constructor(context = 'App')
     {
         this.context = context;
-        // Fix: Remove Node.js process reference and use browser-compatible detection
         this.isDebug = this.detectDebugMode();
     }
 
@@ -12,17 +11,33 @@ export class Logger
     {
         try
         {
-            // Check if we're in development mode via various indicators
+            // Check if we're in a Service Worker environment
+            if (typeof importScripts === 'function')
+            {
+                // Service Worker environment - check extension manifest
+                if (typeof chrome !== 'undefined' && chrome.runtime?.getManifest)
+                {
+                    const manifest = chrome.runtime.getManifest();
+                    return manifest.version?.includes('dev') ||
+                        manifest.name?.toLowerCase().includes('dev') ||
+                        manifest.name?.toLowerCase().includes('debug');
+                }
+                return false;
+            }
+
+            // Browser environment - existing checks
             const isDev =
                 // Extension development mode
                 (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version?.includes('dev')) ||
-                // Local development
-                window.location.hostname === 'localhost' ||
-                window.location.hostname === '127.0.0.1' ||
-                // Debug flag in localStorage
-                localStorage.getItem('debug') === 'true' ||
-                // URL parameter
-                new URLSearchParams(window.location.search).has('debug');
+                // Local development (if window exists)
+                (typeof window !== 'undefined' && (
+                    window.location?.hostname === 'localhost' ||
+                    window.location?.hostname === '127.0.0.1' ||
+                    // Debug flag in localStorage
+                    (window.localStorage && window.localStorage.getItem('debug') === 'true') ||
+                    // URL parameter
+                    (window.location?.search && new URLSearchParams(window.location.search).has('debug'))
+                ));
 
             return isDev;
         } catch (error)
@@ -94,7 +109,7 @@ export class Logger
 
     time(label)
     {
-        if (this.isDebug)
+        if (this.isDebug && typeof console.time === 'function')
         {
             console.time(`[${this.context}] ${label}`);
         }
@@ -102,7 +117,7 @@ export class Logger
 
     timeEnd(label)
     {
-        if (this.isDebug)
+        if (this.isDebug && typeof console.timeEnd === 'function')
         {
             console.timeEnd(`[${this.context}] ${label}`);
         }
@@ -110,7 +125,7 @@ export class Logger
 
     group(label)
     {
-        if (this.isDebug)
+        if (this.isDebug && typeof console.group === 'function')
         {
             console.group(`[${this.context}] ${label}`);
         }
@@ -118,7 +133,7 @@ export class Logger
 
     groupEnd()
     {
-        if (this.isDebug)
+        if (this.isDebug && typeof console.groupEnd === 'function')
         {
             console.groupEnd();
         }
@@ -126,7 +141,7 @@ export class Logger
 
     table(data)
     {
-        if (this.isDebug && console.table)
+        if (this.isDebug && typeof console.table === 'function')
         {
             console.table(data);
         }

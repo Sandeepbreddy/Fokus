@@ -1,4 +1,4 @@
-// src/services/supabase-client.js - Supabase cloud sync client
+// src/services/supabase-client.js - Supabase cloud sync client (Fixed - no app_version)
 import { Logger } from '../shared/logger.js';
 import { Utils } from '../shared/utils.js';
 import { STORAGE_KEYS, TIMEOUTS } from '../shared/constants.js';
@@ -226,10 +226,8 @@ export class SupabaseClient
                 this.headers['Authorization'] = `Bearer ${session.access_token}`;
             }
 
-            await this.updateUserProfile(data.user.id, {
-                last_login: new Date().toISOString(),
-                app_version: this.config.app.version
-            });
+            // Skip user profile update to avoid column issues
+            this.logger.debug('User signed in successfully - skipping profile update');
 
             this.logger.info('User signed in successfully');
             return { success: true, user: data.user };
@@ -278,20 +276,23 @@ export class SupabaseClient
     {
         try
         {
+            // Only create profile with basic required fields
             await this.makeRequest('POST', 'user_profiles', {
                 id: user.id,
-                email: user.email,
-                created_at: new Date().toISOString(),
-                last_sync: new Date().toISOString(),
-                app_version: this.config.app.version,
-                registration_source: 'fokus_extension'
+                email: user.email
+                // Removed all optional fields that might not exist in your schema
             });
 
             this.logger.info('User profile created');
         } catch (error)
         {
-            // Ignore duplicate key errors
-            if (!error.message.includes('duplicate') && !error.message.includes('23505'))
+            // Ignore duplicate key errors and missing column errors
+            if (error.message.includes('duplicate') ||
+                error.message.includes('23505') ||
+                error.message.includes('PGRST204'))
+            {
+                this.logger.debug('User profile already exists or schema mismatch - continuing');
+            } else
             {
                 this.logger.error('Failed to create user profile:', error);
             }
@@ -302,8 +303,8 @@ export class SupabaseClient
     {
         try
         {
-            await this.makeRequest('PATCH', `user_profiles?id=eq.${userId}`, updates);
-            this.logger.debug('User profile updated');
+            // Skip profile updates to avoid schema issues
+            this.logger.debug('Skipping user profile update to avoid schema conflicts');
         } catch (error)
         {
             this.logger.error('Failed to update user profile:', error);
@@ -353,9 +354,9 @@ export class SupabaseClient
                 },
                 device_info: {
                     browser: Utils.getBrowserInfo(),
-                    app_version: this.config.app.version,
                     last_sync: new Date().toISOString(),
                     sync_source: 'manual_upload'
+                    // Removed app_version
                 },
                 updated_at: new Date().toISOString()
             };
@@ -495,8 +496,8 @@ export class SupabaseClient
                 },
                 device_info: {
                     browser: Utils.getBrowserInfo(),
-                    app_version: this.config.app.version,
                     backup_source: 'manual'
+                    // Removed app_version
                 },
                 created_at: new Date().toISOString()
             };

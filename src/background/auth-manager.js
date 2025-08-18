@@ -1,8 +1,9 @@
-// src/background/auth-manager.js - Authentication management
+// src/background/auth-manager.js - Authentication management (Fixed)
 import { Logger } from '../shared/logger.js';
 import { STORAGE_KEYS } from '../shared/constants.js';
 import { storageManager } from './storage-manager.js';
 import { errorHandler } from '../shared/error-handler.js';
+import { SupabaseClient } from '../services/supabase-client.js'; // Static import
 
 export class AuthManager
 {
@@ -19,7 +20,7 @@ export class AuthManager
 
         try
         {
-            const { SupabaseClient } = await import('../services/supabase-client.js');
+            // Create Supabase client directly without dynamic import
             this.supabaseClient = new SupabaseClient();
             const initialized = await this.supabaseClient.init();
 
@@ -47,6 +48,7 @@ export class AuthManager
         }
     }
 
+    // ... rest of the methods remain the same
     async getAuthStatus()
     {
         try
