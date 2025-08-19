@@ -1,9 +1,8 @@
-// src/background/auth-manager.js - Authentication management (Fixed)
 import { Logger } from '../shared/logger.js';
 import { STORAGE_KEYS } from '../shared/constants.js';
 import { storageManager } from './storage-manager.js';
 import { errorHandler } from '../shared/error-handler.js';
-import { SupabaseClient } from '../services/supabase-client.js'; // Static import
+import { SupabaseClient } from '../services/supabase-client.js';
 
 export class AuthManager
 {
@@ -20,7 +19,6 @@ export class AuthManager
 
         try
         {
-            // Create Supabase client directly without dynamic import
             this.supabaseClient = new SupabaseClient();
             const initialized = await this.supabaseClient.init();
 
@@ -48,7 +46,6 @@ export class AuthManager
         }
     }
 
-    // ... rest of the methods remain the same
     async getAuthStatus()
     {
         try
@@ -64,7 +61,6 @@ export class AuthManager
                 };
             }
 
-            // Check offline mode
             const offlineData = await storageManager.get([
                 STORAGE_KEYS.OFFLINE_MODE,
                 STORAGE_KEYS.OFFLINE_EXPIRY
@@ -121,7 +117,6 @@ export class AuthManager
             return result;
         } catch (error)
         {
-            // Fallback to offline mode on network errors
             if (errorHandler.isNetworkError(error))
             {
                 this.logger.info('Network error, falling back to offline mode');
@@ -147,7 +142,6 @@ export class AuthManager
             return await this.supabaseClient.signUp(email, password);
         } catch (error)
         {
-            // Fallback to offline mode on network errors
             if (errorHandler.isNetworkError(error))
             {
                 this.logger.info('Network error, creating offline account');
@@ -178,7 +172,6 @@ export class AuthManager
         } catch (error)
         {
             errorHandler.handleError(error, 'sign-out');
-            // Always succeed locally for sign out
             await storageManager.remove([
                 STORAGE_KEYS.OFFLINE_MODE,
                 STORAGE_KEYS.OFFLINE_EXPIRY,
@@ -250,7 +243,7 @@ export class AuthManager
     {
         try
         {
-            const duration = 24 * 60 * 60 * 1000; // 24 hours
+            const duration = 24 * 60 * 60 * 1000;
             const expiry = Date.now() + duration;
 
             await storageManager.set({
@@ -282,8 +275,6 @@ export class AuthManager
     {
         return this.supabaseClient;
     }
-
-    // Cleanup method
     destroy()
     {
         this.supabaseClient = null;
@@ -291,6 +282,4 @@ export class AuthManager
         this.logger.info('AuthManager destroyed');
     }
 }
-
-// Export singleton instance
 export const authManager = new AuthManager();
