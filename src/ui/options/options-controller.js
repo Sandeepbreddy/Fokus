@@ -201,6 +201,59 @@ export class OptionsController
         }
         return 'CHANGE PIN';
     }
+    async toggleBlocklistSource(id, enabled)
+    {
+        try
+        {
+            const data = await chrome.storage.local.get([STORAGE_KEYS.BLOCKLIST_SOURCES]);
+            const sources = data[STORAGE_KEYS.BLOCKLIST_SOURCES] || [];
+
+            const sourceIndex = sources.findIndex(s => s.id === id);
+            if (sourceIndex !== -1)
+            {
+                sources[sourceIndex].enabled = enabled;
+                await chrome.storage.local.set({ [STORAGE_KEYS.BLOCKLIST_SOURCES]: sources });
+
+                // If enabling a source, trigger an update
+                if (enabled)
+                {
+                    this.logger.info(`Enabled blocklist: ${sources[sourceIndex].name}, triggering update...`);
+
+                    // Show immediate feedback
+                    this.showSuccess(`Blocklist enabled: ${sources[sourceIndex].name}. Updating...`);
+
+                    // Update in background
+                    this.sendMessage({ action: 'updateBlocklists' }).then(response =>
+                    {
+                        if (response && response.success)
+                        {
+                            this.loadBlocklistSources();
+                            this.loadStats();
+                            this.showSuccess('Blocklist updated successfully!');
+                        } else
+                        {
+                            this.showError('Failed to update blocklist after enabling');
+                        }
+                    }).catch(error =>
+                    {
+                        this.logger.error('Background update failed:', error);
+                        this.showError('Failed to update blocklist after enabling');
+                    });
+                } else
+                {
+                    // If disabling, just reload the display
+                    await this.loadBlocklistSources();
+                    await this.loadStats();
+                    this.showSuccess('Blocklist disabled successfully!');
+                }
+            }
+        } catch (error)
+        {
+            this.logger.error('Failed to toggle blocklist:', error);
+            this.showError('Failed to update blocklist setting');
+        }
+    }
+
 
     async changePIN()
     {
@@ -638,6 +691,14 @@ export class OptionsController
             const results = data[STORAGE_KEYS.BLOCKLIST_RESULTS] || [];
             const lastUpdate = data.lastBlocklistUpdate || 0;
 
+            // If no results exist yet, try to trigger an initial update
+            if (results.length === 0 && sources.some(s => s.enabled))
+            {
+                this.logger.info('No blocklist results found, triggering initial update...');
+                // Don't await this - let it run in background
+                this.triggerInitialBlocklistUpdate();
+            }
+
             this.renderBlocklistSources(sources, results, lastUpdate);
         } catch (error)
         {
@@ -667,65 +728,204 @@ export class OptionsController
             const lastUpdated = result.lastUpdated ?
                 new Date(result.lastUpdated).toLocaleDateString() : 'Never';
 
+            // Determine status
+            let statusText = 'DISABLED';
+            let statusClass = 'inactive';
+
+            if (source.enabled)
+            {
+                if (result.success)
+                {
+                    statusText = 'ACTIVE';
+                    statusClass = 'active';
+                } else if (result.error)
+                {
+                    statusText = 'FAILED';
+                    statusClass = 'inactive';
+                } else
+                {
+                    statusText = 'PENDING';
+                    statusClass = 'inactive';
+                }
+            }
+
             const item = document.createElement('div');
             item.className = 'blocklist-item';
             item.dataset.sourceId = source.id;
             item.innerHTML = `
-                <div class="blocklist-header">
-                    <div class="blocklist-name">${Utils.escapeHtml(source.name)}</div>
-                    <div class="blocklist-status">
-                        <span class="status-badge ${isActive ? 'active' : 'inactive'}">
-                            ${isActive ? 'ACTIVE' : (source.enabled ? 'FAILED' : 'DISABLED')}
-                        </span>
-                        ${isActive ? `<span>${domainCount.toLocaleString()} domains</span>` : ''}
-                    </div>
+            <div class="blocklist-header">
+                <div class="blocklist-name">${Utils.escapeHtml(source.name)}</div>
+                <div class="blocklist-status">
+                    <span class="status-badge ${statusClass}">
+                        ${statusText}
+                    </span>
+                    ${isActive ? `<span>${domainCount.toLocaleString()} domains</span>` : ''}
                 </div>
-                
-                <div class="blocklist-info">
-                    ${Utils.escapeHtml(source.description || 'Community blocklist')}
-                </div>
-                
-                <div class="blocklist-url">${Utils.escapeHtml(source.url)}</div>
-                
-                <div class="blocklist-actions">
-                    <label style="display: flex; align-items: center; gap: 5px; font-size: 13px;">
-                        <input type="checkbox" class="blocklist-toggle" ${source.enabled ? 'checked' : ''}>
-                        Enable
-                    </label>
-                    <span style="font-size: 12px; color: #666;">Last updated: ${lastUpdated}</span>
-                </div>
-                
-                ${result.error ? `<div style="color: #d32f2f; font-size: 12px; margin-top: 8px;">Error: ${Utils.escapeHtml(result.error)}</div>` : ''}
-            `;
+            </div>
+            
+            <div class="blocklist-info">
+                ${Utils.escapeHtml(source.description || 'Community blocklist')}
+            </div>
+            
+            <div class="blocklist-url">${Utils.escapeHtml(source.url)}</div>
+            
+            <div class="blocklist-actions">
+                <label style="display: flex; align-items: center; gap: 5px; font-size: 13px;">
+                    <input type="checkbox" class="blocklist-toggle" ${source.enabled ? 'checked' : ''}>
+                    Enable
+                </label>
+                <span style="font-size: 12px; color: #666;">Last updated: ${lastUpdated}</span>
+            </div>
+            
+            ${result.error ? `<div style="color: #d32f2f; font-size: 12px; margin-top: 8px;">Error: ${Utils.escapeHtml(result.error)}</div>` : ''}
+        `;
             fragment.appendChild(item);
         });
 
         container.innerHTML = '';
         container.appendChild(fragment);
+
+        // Show last update time if available
+        if (lastUpdate > 0)
+        {
+            const updateInfo = document.createElement('div');
+            updateInfo.style.cssText = 'text-align: center; margin-top: 15px; font-size: 12px; color: #666;';
+            updateInfo.textContent = `Last successful update: ${new Date(lastUpdate).toLocaleString()}`;
+            container.appendChild(updateInfo);
+        }
     }
 
-    async toggleBlocklistSource(id, enabled)
+    async viewBlockedCount()
     {
         try
         {
-            const data = await chrome.storage.local.get([STORAGE_KEYS.BLOCKLIST_SOURCES]);
+            const data = await chrome.storage.local.get([
+                STORAGE_KEYS.BLOCKED_DOMAINS,
+                STORAGE_KEYS.CUSTOM_DOMAINS,
+                STORAGE_KEYS.BLOCKED_KEYWORDS,
+                STORAGE_KEYS.BLOCKLIST_RESULTS,
+                STORAGE_KEYS.BLOCKLIST_SOURCES,
+                'lastBlocklistUpdate'
+            ]);
+
+            const githubDomains = (data[STORAGE_KEYS.BLOCKED_DOMAINS] || []).length;
+            const customDomains = (data[STORAGE_KEYS.CUSTOM_DOMAINS] || []).length;
+            const keywords = (data[STORAGE_KEYS.BLOCKED_KEYWORDS] || []).length;
+            const results = data[STORAGE_KEYS.BLOCKLIST_RESULTS] || [];
             const sources = data[STORAGE_KEYS.BLOCKLIST_SOURCES] || [];
+            const lastUpdate = data.lastBlocklistUpdate ?
+                new Date(data.lastBlocklistUpdate).toLocaleString() : 'Never';
 
-            const sourceIndex = sources.findIndex(s => s.id === id);
-            if (sourceIndex !== -1)
+            const activeResults = results.filter(r => r.success);
+            const failedResults = results.filter(r => !r.success);
+            const enabledSources = sources.filter(s => s.enabled);
+
+            let message = `📊 Blocking Statistics\n\n`;
+            message += `🛡️ Total Protection:\n`;
+            message += `• Blocklist Domains: ${githubDomains.toLocaleString()}\n`;
+            message += `• Custom Domains: ${customDomains.toLocaleString()}\n`;
+            message += `• Total Domains: ${(githubDomains + customDomains).toLocaleString()}\n`;
+            message += `• Blocked Keywords: ${keywords.toLocaleString()}\n\n`;
+
+            message += `📋 Blocklist Sources:\n`;
+            message += `• Total Sources: ${sources.length}\n`;
+            message += `• Enabled Sources: ${enabledSources.length}\n`;
+            message += `• Active Sources: ${activeResults.length}\n`;
+            message += `• Failed Sources: ${failedResults.length}\n\n`;
+
+            if (activeResults.length > 0)
             {
-                sources[sourceIndex].enabled = enabled;
-                await chrome.storage.local.set({ [STORAGE_KEYS.BLOCKLIST_SOURCES]: sources });
+                message += `✅ Active Blocklists:\n`;
+                activeResults.forEach(result =>
+                {
+                    const source = sources.find(s => s.id === result.id);
+                    message += `• ${source?.name || result.id}: ${result.domainCount.toLocaleString()} domains\n`;
+                });
+                message += `\n`;
+            }
 
+            if (failedResults.length > 0)
+            {
+                message += `❌ Failed Blocklists:\n`;
+                failedResults.forEach(result =>
+                {
+                    const source = sources.find(s => s.id === result.id);
+                    message += `• ${source?.name || result.id}: ${result.error}\n`;
+                });
+                message += `\n`;
+            }
+
+            message += `🕒 Last Updated: ${lastUpdate}`;
+
+            alert(message);
+        } catch (error)
+        {
+            this.showError('Failed to load blocking statistics.');
+        }
+    }
+
+    async triggerInitialBlocklistUpdate()
+    {
+        try
+        {
+            // Show loading state
+            const container = document.getElementById('blocklists-container');
+            if (container)
+            {
+                container.innerHTML = '<div class="loading">Updating blocklists for the first time...</div>';
+            }
+
+            this.logger.info('Triggering initial blocklist update...');
+
+            const response = await this.sendMessage({ action: 'updateBlocklists' });
+
+            this.logger.debug('Initial update response:', response);
+
+            if (response && response.success)
+            {
+                this.logger.info('Initial blocklist update completed successfully');
+                // Reload the display
                 await this.loadBlocklistSources();
-                await this.loadStats();
+                this.showSuccess('Blocklists updated successfully!');
+            } else
+            {
+                let errorMsg = 'Unknown error occurred';
 
-                this.showSuccess(`Blocklist ${enabled ? 'enabled' : 'disabled'} successfully!`);
+                if (response && response.error)
+                {
+                    errorMsg = response.error;
+                } else if (response && typeof response === 'object')
+                {
+                    errorMsg = JSON.stringify(response);
+                }
+
+                this.logger.error('Initial blocklist update failed:', errorMsg);
+
+                // Show error but still display the interface
+                this.showError(`Blocklist update failed: ${errorMsg}`);
+                await this.loadBlocklistSources();
             }
         } catch (error)
         {
-            this.logger.error('Failed to toggle blocklist:', error);
-            this.showError('Failed to update blocklist setting');
+            this.logger.error('Initial blocklist update error:', error);
+
+            // Determine error message
+            let errorMsg = 'Unknown error';
+            if (error instanceof Error)
+            {
+                errorMsg = error.message;
+            } else if (typeof error === 'string')
+            {
+                errorMsg = error;
+            } else if (error && typeof error === 'object')
+            {
+                errorMsg = error.error || error.message || JSON.stringify(error);
+            }
+
+            this.showError(`Failed to update blocklists: ${errorMsg}`);
+
+            // Still show the interface even if update failed
+            await this.loadBlocklistSources();
         }
     }
 
@@ -740,11 +940,34 @@ export class OptionsController
 
         try
         {
-            // Simulate blocklist update for now
-            await Utils.sleep(2000);
+            this.logger.info('Starting forced blocklist update...');
 
-            button.textContent = 'UPDATED!';
-            this.showSuccess('Blocklist update completed!');
+            // Send message to background script to update blocklists
+            const response = await this.sendMessage({
+                action: 'updateBlocklists'
+            });
+
+            if (response && response.success)
+            {
+                button.textContent = 'UPDATE COMPLETE!';
+
+                // Show detailed success message
+                const message = response.message ||
+                    `Updated ${response.successfulSources || 0}/${response.totalSources || 0} blocklists with ${(response.totalDomains || 0).toLocaleString()} domains`;
+
+                this.showSuccess(message);
+
+                // Reload the blocklist display
+                await this.loadBlocklistSources();
+                await this.loadStats();
+
+            } else
+            {
+                button.textContent = 'UPDATE FAILED';
+                const errorMsg = response?.error || 'Failed to update blocklists';
+                this.showError(`Update failed: ${errorMsg}`);
+                this.logger.error('Blocklist update failed:', response);
+            }
         } catch (error)
         {
             this.logger.error('Update failed:', error);
@@ -756,7 +979,7 @@ export class OptionsController
             {
                 button.textContent = originalText;
                 button.disabled = false;
-            }, 2000);
+            }, 3000);
         }
     }
 
@@ -1013,6 +1236,19 @@ export class OptionsController
         }
     }
 
+    async refreshAllData()
+    {
+        try
+        {
+            this.logger.info('Refreshing all data...');
+            await this.loadAllSettings();
+            this.logger.debug('All data refreshed');
+        } catch (error)
+        {
+            this.logger.error('Failed to refresh data:', error);
+        }
+    }
+
     async resetAllSettings()
     {
         if (!confirm('Reset ALL settings to defaults?\n\nThis will:\n- Clear all custom domains and keywords\n- Reset PIN to 1234\n- Clear all statistics\n- Reset blocklist sources\n\nThis action cannot be undone!'))
@@ -1172,140 +1408,28 @@ export class OptionsController
         {
             try
             {
+                this.logger.debug('Sending message:', message);
+
                 chrome.runtime.sendMessage(message, (response) =>
                 {
                     if (chrome.runtime.lastError)
                     {
-                        reject(new Error(chrome.runtime.lastError.message));
+                        const error = new Error(chrome.runtime.lastError.message);
+                        this.logger.error('Chrome runtime error:', error);
+                        reject(error);
                     } else
                     {
+                        this.logger.debug('Received response:', response);
                         resolve(response);
                     }
                 });
             } catch (error)
             {
+                this.logger.error('Failed to send message:', error);
                 reject(error);
             }
         });
     }
-
-    debounce(func, wait)
-    {
-        const key = func.toString();
-        return (...args) =>
-        {
-            clearTimeout(this.debounceTimers.get(key));
-            const timeout = setTimeout(() =>
-            {
-                this.debounceTimers.delete(key);
-                func.apply(this, args);
-            }, wait);
-            this.debounceTimers.set(key, timeout);
-        };
-    }
-
-    async refreshAllData()
-    {
-        try
-        {
-            await this.loadAllSettings();
-            this.logger.debug('All data refreshed');
-        } catch (error)
-        {
-            this.logger.error('Failed to refresh data:', error);
-        }
-    }
-
-    // Public API for external handlers
-    async handleExportSettings()
-    {
-        await this.exportSettings();
-    }
-
-    getStatus()
-    {
-        return {
-            initialized: this.isInitialized,
-            currentPin: !!this.currentPin,
-            cacheSize: this.cache.size,
-            debounceTimers: this.debounceTimers.size
-        };
-    }
-
-    // Performance monitoring
-    trackPerformance(operation, fn)
-    {
-        if (!this.isInitialized) return fn;
-
-        return async (...args) =>
-        {
-            const start = performance.now();
-            try
-            {
-                const result = await fn(...args);
-                const duration = performance.now() - start;
-                this.logger.debug(`${operation} completed in ${duration.toFixed(2)}ms`);
-                return result;
-            } catch (error)
-            {
-                const duration = performance.now() - start;
-                this.logger.error(`${operation} failed after ${duration.toFixed(2)}ms:`, error);
-                throw error;
-            }
-        };
-    }
-
-    // Error recovery methods
-    async recoverFromError(error, context)
-    {
-        this.logger.warn(`Recovering from error in ${context}:`, error.message);
-
-        try
-        {
-            // Clear problematic cache
-            this.cache.clear();
-
-            // Reload critical settings
-            await this.loadCurrentPin();
-            await this.loadStats();
-
-            this.showError('An error occurred but has been recovered. Some data may have been refreshed.');
-        } catch (recoveryError)
-        {
-            this.logger.error('Recovery failed:', recoveryError);
-            this.showError('A critical error occurred. Please refresh the page.');
-        }
-    }
-
-    // Memory management
-    optimizeMemoryUsage()
-    {
-        // Clear expired cache entries
-        const now = Date.now();
-        for (const [key, value] of this.cache.entries())
-        {
-            if (typeof value === 'object' && value.timestamp)
-            {
-                if (now - value.timestamp > 300000)
-                { // 5 minutes
-                    this.cache.delete(key);
-                }
-            }
-        }
-
-        // Clear completed timers
-        for (const [key, timer] of this.debounceTimers.entries())
-        {
-            if (!timer)
-            {
-                this.debounceTimers.delete(key);
-            }
-        }
-
-        this.logger.debug('Memory optimization completed');
-    }
-
-    // Cleanup method
     destroy()
     {
         // Clear all timers
