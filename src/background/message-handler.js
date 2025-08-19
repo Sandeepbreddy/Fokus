@@ -1,6 +1,6 @@
 // src/background/message-handler.js - Fixed message handling for blocklists
 import { Logger } from '../shared/logger.js';
-import { MESSAGE_TYPES, STORAGE_KEYS } from '../shared/constants.js';
+import { MESSAGE_TYPES, STORAGE_KEYS, DEFAULT_BLOCKLISTS } from '../shared/constants.js';
 import { errorHandler } from '../shared/error-handler.js';
 import { Utils } from '../shared/utils.js';
 
@@ -240,20 +240,26 @@ export class MessageHandler
         {
             this.logger.info('Starting blocklist update...');
 
-            // Get current blocklist sources
-            const data = await chrome.storage.local.get(['blocklistSources']);
-            const sources = data.blocklistSources || [];
+            // Get current blocklist sources - FIX: Use STORAGE_KEYS constant
+            const data = await chrome.storage.local.get([STORAGE_KEYS.BLOCKLIST_SOURCES, 'blocklistInitialized']);
+
+            // FIX: Initialize with default blocklists if not configured
+            let sources = data[STORAGE_KEYS.BLOCKLIST_SOURCES];
+
+            if (!sources || sources.length === 0)
+            {
+                // Initialize with default blocklists
+                this.logger.info('No blocklist sources found, initializing with defaults...');
+                sources = DEFAULT_BLOCKLISTS;
+
+                // Save the default blocklists
+                await chrome.storage.local.set({
+                    [STORAGE_KEYS.BLOCKLIST_SOURCES]: sources,
+                    blocklistInitialized: true
+                });
+            }
 
             this.logger.debug('Found blocklist sources:', sources.length);
-
-            if (sources.length === 0)
-            {
-                this.logger.warn('No blocklist sources configured');
-                return {
-                    success: false,
-                    error: 'No blocklist sources configured'
-                };
-            }
 
             const enabledSources = sources.filter(s => s.enabled);
             this.logger.info(`Processing ${enabledSources.length} enabled sources out of ${sources.length} total`);
@@ -263,7 +269,7 @@ export class MessageHandler
                 this.logger.warn('No enabled blocklist sources found');
                 return {
                     success: false,
-                    error: 'No enabled blocklist sources found'
+                    error: 'No enabled blocklist sources found. Enable at least one blocklist in settings.'
                 };
             }
 
@@ -322,8 +328,8 @@ export class MessageHandler
             this.logger.info(`Storing ${consolidatedDomains.length} total domains from ${results.length} sources`);
 
             await chrome.storage.local.set({
-                blocklistResults: results,
-                blockedDomains: consolidatedDomains,
+                [STORAGE_KEYS.BLOCKLIST_RESULTS]: results,
+                [STORAGE_KEYS.BLOCKED_DOMAINS]: consolidatedDomains,
                 lastBlocklistUpdate: Date.now()
             });
 
